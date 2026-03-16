@@ -28,7 +28,7 @@ Extract and add to your PATH, or run directly.
 
 Or build from source:
 ```bash
-git clone https://github.com/eminozata/lazycut.git
+git clone https://github.com/emin-ozata/lazycut.git
 cd lazycut
 go build
 ./lazycut video.mp4
