@@ -2,7 +2,7 @@ package panels
 
 import (
 	"fmt"
-	"lazycut/video"
+	"github.com/arobase-che/lazycut/video"
 	"strings"
 	"time"
 
