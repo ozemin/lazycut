@@ -1,4 +1,4 @@
-module lazycut
+module github.com/arobase-che/lazycut
 
 go 1.24.2
 
