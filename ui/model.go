@@ -2,8 +2,8 @@ package ui
 
 import (
 	"fmt"
-	"lazycut/ui/panels"
-	"lazycut/video"
+	"github.com/emin-ozata/lazycut/ui/panels"
+	"github.com/emin-ozata/lazycut/video"
 	"strings"
 	"time"
 
