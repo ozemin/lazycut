@@ -39,7 +39,8 @@ type Model struct {
 	showExportModal    bool
 	exportFilename     string
 	exportAspectRatio  int // index into video.AspectRatioOptions
-	exportFocusField   int // 0: filename, 1: aspect ratio
+	exportFocusField   int // 0: filename, 1: aspect ratio, 2: mode (multi only)
+	exportMode         int // 0: separate clips, 1: single clip
 	exporting          bool
 	exportProgress     float64
 	exportProgressChan <-chan float64
@@ -64,6 +65,13 @@ func NewModel(player *video.Player) Model {
 		timeline:   panels.NewTimeline(player),
 		ready:      false,
 	}
+}
+
+// allSections returns the committed sections to export.
+func (m *Model) allSections() []video.Section {
+	sections := make([]video.Section, len(m.player.Sections))
+	copy(sections, m.player.Sections)
+	return sections
 }
 
 func (m *Model) saveTrimState() {
@@ -216,6 +224,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "o":
 			m.saveTrimState()
 			m.player.Trim.SetOut(pos)
+			if m.player.Trim.IsComplete() {
+				m.player.AddSection(*m.player.Trim.InPoint, *m.player.Trim.OutPoint)
+				m.player.Trim.Clear()
+			}
+			return m, nil
+
+		case "X":
+			m.player.RemoveLastSection()
 			return m, nil
 
 		case "p":
@@ -227,10 +243,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "enter":
-			if m.player.Trim.IsComplete() {
+			if len(m.player.Sections) > 0 {
 				m.showExportModal = true
 				m.exportFilename = ""
 				m.exportAspectRatio = 0
+				m.exportMode = 0
+				m.exportFocusField = 0
 			}
 			return m, nil
 
@@ -329,7 +347,14 @@ func (m Model) View() string {
 }
 
 func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-    switch msg.Type {
+	sections := m.allSections()
+	isMulti := len(sections) > 1
+	maxField := 1
+	if isMulti {
+		maxField = 2
+	}
+
+	switch msg.Type {
 	case tea.KeyEsc:
 		if !m.exporting {
 			m.showExportModal = false
@@ -345,16 +370,34 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		progressChan := make(chan float64, 100)
 		m.exportProgressChan = progressChan
 		props := m.player.Properties()
-		opts := video.ExportOptions{
+
+		if !isMulti {
+			// Single section — existing behavior
+			opts := video.ExportOptions{
+				Input:       m.player.Path(),
+				Output:      m.exportFilename,
+				InPoint:     sections[0].In,
+				OutPoint:    sections[0].Out,
+				AspectRatio: video.AspectRatioOptions[m.exportAspectRatio].Ratio,
+				Width:       props.Width,
+				Height:      props.Height,
+			}
+			return m, startExportWithChan(opts, progressChan)
+		}
+
+		// Multi-section
+		multiOpts := video.MultiExportOptions{
 			Input:       m.player.Path(),
 			Output:      m.exportFilename,
-			InPoint:     *m.player.Trim.InPoint,
-			OutPoint:    *m.player.Trim.OutPoint,
+			Sections:    sections,
 			AspectRatio: video.AspectRatioOptions[m.exportAspectRatio].Ratio,
 			Width:       props.Width,
 			Height:      props.Height,
 		}
-		return m, startExportWithChan(opts, progressChan)
+		if m.exportMode == 0 {
+			return m, startMultiExportSeparate(multiOpts, progressChan)
+		}
+		return m, startMultiExportConcatenated(multiOpts, progressChan)
 
 	case tea.KeyUp, tea.KeyShiftTab:
 		if m.exportFocusField > 0 {
@@ -363,7 +406,7 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyDown, tea.KeyTab:
-		if m.exportFocusField < 1 {
+		if m.exportFocusField < maxField {
 			m.exportFocusField++
 		}
 		return m, nil
@@ -374,12 +417,16 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.exportAspectRatio < 0 {
 				m.exportAspectRatio = len(video.AspectRatioOptions) - 1
 			}
+		} else if m.exportFocusField == 2 {
+			m.exportMode = (m.exportMode + 1) % 2
 		}
 		return m, nil
 
 	case tea.KeyRight:
 		if m.exportFocusField == 1 {
 			m.exportAspectRatio = (m.exportAspectRatio + 1) % len(video.AspectRatioOptions)
+		} else if m.exportFocusField == 2 {
+			m.exportMode = (m.exportMode + 1) % 2
 		}
 		return m, nil
 
@@ -389,36 +436,41 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-    default:
-        // Vim-style navigation aliases in modal
-        switch msg.String() {
-        case "j":
-            if m.exportFocusField < 1 { m.exportFocusField++ }
-            return m, nil
-        case "k":
-            if m.exportFocusField > 0 { m.exportFocusField-- }
-            return m, nil
-        case "h":
-            if m.exportFocusField == 1 {
-                m.exportAspectRatio--
-                if m.exportAspectRatio < 0 {
-                    m.exportAspectRatio = len(video.AspectRatioOptions) - 1
-                }
-            }
-            return m, nil
-        case "l":
-            if m.exportFocusField == 1 {
-                m.exportAspectRatio = (m.exportAspectRatio + 1) % len(video.AspectRatioOptions)
-            }
-            return m, nil
-        }
-        if m.exportFocusField == 0 && len(msg.Runes) > 0 {
-            m.exportFilename += string(msg.Runes)
-        }
-        return m, nil
-    }
-
-	return m, nil
+	default:
+		switch msg.String() {
+		case "j":
+			if m.exportFocusField < maxField {
+				m.exportFocusField++
+			}
+			return m, nil
+		case "k":
+			if m.exportFocusField > 0 {
+				m.exportFocusField--
+			}
+			return m, nil
+		case "h":
+			if m.exportFocusField == 1 {
+				m.exportAspectRatio--
+				if m.exportAspectRatio < 0 {
+					m.exportAspectRatio = len(video.AspectRatioOptions) - 1
+				}
+			} else if m.exportFocusField == 2 {
+				m.exportMode = (m.exportMode + 1) % 2
+			}
+			return m, nil
+		case "l":
+			if m.exportFocusField == 1 {
+				m.exportAspectRatio = (m.exportAspectRatio + 1) % len(video.AspectRatioOptions)
+			} else if m.exportFocusField == 2 {
+				m.exportMode = (m.exportMode + 1) % 2
+			}
+			return m, nil
+		}
+		if m.exportFocusField == 0 && len(msg.Runes) > 0 {
+			m.exportFilename += string(msg.Runes)
+		}
+		return m, nil
+	}
 }
 
 func (m Model) handleHelpModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -464,6 +516,7 @@ func (m Model) renderHelpModal(_ string) string {
 	trim := sectionStyle.Render("TRIM") + "\n" +
 		kd("i", "Set in-point") + "\n" +
 		kd("o", "Set out-point") + "\n" +
+		kd("X", "Remove last section") + "\n" +
 		kd("p", "Preview selection") + "\n" +
 		kd("d / Esc", "Clear selection") + "\n" +
 		kd("Enter", "Export")
@@ -501,6 +554,27 @@ func startExportWithChan(opts video.ExportOptions, progressChan chan float64) te
 	)
 }
 
+func startMultiExportSeparate(opts video.MultiExportOptions, progressChan chan float64) tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg {
+			outputs, err := video.ExportSeparate(opts, progressChan)
+			output := strings.Join(outputs, ", ")
+			return ExportDoneMsg{Output: output, Err: err}
+		},
+		listenProgress(progressChan),
+	)
+}
+
+func startMultiExportConcatenated(opts video.MultiExportOptions, progressChan chan float64) tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg {
+			output, err := video.ExportConcatenated(opts, progressChan)
+			return ExportDoneMsg{Output: output, Err: err}
+		},
+		listenProgress(progressChan),
+	)
+}
+
 func listenProgress(ch <-chan float64) tea.Cmd {
 	return func() tea.Msg {
 		p, ok := <-ch
@@ -512,7 +586,6 @@ func listenProgress(ch <-chan float64) tea.Cmd {
 }
 
 func (m Model) renderExportModal(_ string) string {
-	// Modern, minimal styling
 	titleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("252")).
 		Bold(true)
@@ -529,17 +602,28 @@ func (m Model) renderExportModal(_ string) string {
 		Foreground(lipgloss.Color("240")).
 		Italic(true)
 
+	sections := m.allSections()
+	isMulti := len(sections) > 1
+
 	props := m.player.Properties()
-	opts := video.ExportOptions{
-		Input:       m.player.Path(),
-		Output:      m.exportFilename,
-		InPoint:     *m.player.Trim.InPoint,
-		OutPoint:    *m.player.Trim.OutPoint,
-		AspectRatio: video.AspectRatioOptions[m.exportAspectRatio].Ratio,
-		Width:       props.Width,
-		Height:      props.Height,
+
+	// Build a representative ffmpeg command for display
+	var ffmpegCmd string
+	if len(sections) > 0 {
+		opts := video.ExportOptions{
+			Input:       m.player.Path(),
+			Output:      m.exportFilename,
+			InPoint:     sections[0].In,
+			OutPoint:    sections[0].Out,
+			AspectRatio: video.AspectRatioOptions[m.exportAspectRatio].Ratio,
+			Width:       props.Width,
+			Height:      props.Height,
+		}
+		ffmpegCmd = video.BuildFFmpegCommand(opts)
+		if isMulti {
+			ffmpegCmd = fmt.Sprintf("(%d sections) %s ...", len(sections), ffmpegCmd)
+		}
 	}
-	ffmpegCmd := video.BuildFFmpegCommand(opts)
 
 	var content string
 
@@ -559,6 +643,23 @@ func (m Model) renderExportModal(_ string) string {
 			cmdStyle.Render(ffmpegCmd)
 	} else {
 		title := titleStyle.Render("Export Selection")
+		if isMulti {
+			title = titleStyle.Render(fmt.Sprintf("Export %d Sections", len(sections)))
+		}
+
+		// Section list for multi mode
+		var sectionList string
+		if isMulti {
+			for i, sec := range sections {
+				sectionList += dimStyle.Render(fmt.Sprintf("  #%d  %s → %s  (%s)",
+					i+1,
+					formatModalDuration(sec.In),
+					formatModalDuration(sec.Out),
+					formatModalDuration(sec.Duration()),
+				)) + "\n"
+			}
+			sectionList += "\n"
+		}
 
 		filename := m.exportFilename
 		filenameDisplay := filename
@@ -571,10 +672,13 @@ func (m Model) renderExportModal(_ string) string {
 
 		fnIndicator := "  "
 		arIndicator := "  "
+		modeIndicator := "  "
 		if m.exportFocusField == 0 {
 			fnIndicator = accentStyle.Render("> ")
-		} else {
+		} else if m.exportFocusField == 1 {
 			arIndicator = accentStyle.Render("> ")
+		} else {
+			modeIndicator = accentStyle.Render("> ")
 		}
 
 		var ratioLine string
@@ -586,15 +690,31 @@ func (m Model) renderExportModal(_ string) string {
 			}
 		}
 
+		modeOptions := []string{"Separate Clips", "Single Clip"}
+		var modeLine string
+		for i, opt := range modeOptions {
+			if i == m.exportMode {
+				modeLine += accentStyle.Render("["+opt+"]") + " "
+			} else {
+				modeLine += dimStyle.Render(" "+opt) + "  "
+			}
+		}
+
 		keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 		footer := keyStyle.Render("↑↓") + labelStyle.Render(" field  ") +
-			keyStyle.Render("←→") + labelStyle.Render(" ratio  ") +
+			keyStyle.Render("←→") + labelStyle.Render(" select  ") +
 			keyStyle.Render("Enter") + labelStyle.Render(" export  ") +
 			keyStyle.Render("Esc") + labelStyle.Render(" cancel")
 
+		fields := fnIndicator + labelStyle.Render("Filename  ") + valueStyle.Render(filenameDisplay) + "\n\n" +
+			arIndicator + labelStyle.Render("Aspect    ") + ratioLine
+		if isMulti {
+			fields += "\n\n" + modeIndicator + labelStyle.Render("Mode      ") + modeLine
+		}
+
 		content = title + "\n\n" +
-			fnIndicator + labelStyle.Render("Filename  ") + valueStyle.Render(filenameDisplay) + "\n\n" +
-			arIndicator + labelStyle.Render("Aspect    ") + ratioLine + "\n\n" +
+			sectionList +
+			fields + "\n\n" +
 			cmdStyle.Render(ffmpegCmd) + "\n\n" +
 			footer
 	}
@@ -607,4 +727,11 @@ func (m Model) renderExportModal(_ string) string {
 		Render(content)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
+}
+
+func formatModalDuration(d time.Duration) string {
+	total := int(d.Seconds())
+	mins := total / 60
+	secs := total % 60
+	return fmt.Sprintf("%02d:%02d", mins, secs)
 }

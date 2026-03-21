@@ -88,15 +88,34 @@ func (t *Timeline) buildProgressBar(barWidth int, pos, dur time.Duration, trim *
 		}
 	}
 
+	// Build index ranges for committed sections
+	type sectionRange struct{ in, out int }
+	var committedRanges []sectionRange
+	for _, sec := range t.player.Sections {
+		si := int(float64(sec.In) / float64(dur) * float64(barWidth))
+		so := int(float64(sec.Out) / float64(dur) * float64(barWidth))
+		if si > barWidth {
+			si = barWidth
+		}
+		if so > barWidth {
+			so = barWidth
+		}
+		committedRanges = append(committedRanges, sectionRange{si, so})
+	}
+
 	var bar strings.Builder
 	bar.WriteString("[")
 	for i := 0; i < barWidth; i++ {
-		inSelection := false
-		if inIdx >= 0 && outIdx >= 0 && i >= inIdx && i <= outIdx {
-			inSelection = true
+		inActive := inIdx >= 0 && outIdx >= 0 && i >= inIdx && i <= outIdx
+		inCommitted := false
+		for _, r := range committedRanges {
+			if i >= r.in && i <= r.out {
+				inCommitted = true
+				break
+			}
 		}
 
-		if inSelection {
+		if inActive || inCommitted {
 			bar.WriteString("▓")
 		} else if i < posIdx {
 			bar.WriteString("=")
@@ -120,6 +139,20 @@ func (t *Timeline) buildMarkerLine(barWidth int, dur time.Duration, trim *video.
 	line := make([]string, barWidth+2)
 	for i := range line {
 		line[i] = " "
+	}
+
+	// Draw committed section markers (active trim markers take priority)
+	for _, sec := range t.player.Sections {
+		si := int(float64(sec.In)/float64(dur)*float64(barWidth)) + 1
+		so := int(float64(sec.Out)/float64(dur)*float64(barWidth)) + 1
+		if si >= len(line) {
+			si = len(line) - 1
+		}
+		if so >= len(line) {
+			so = len(line) - 1
+		}
+		line[si] = inStyle.Render("▼")
+		line[so] = outStyle.Render("▼")
 	}
 
 	if trim.InPoint != nil {
@@ -181,6 +214,7 @@ func repeat(s string, n int) string {
 // buildFooterHelp generates the keybindings line based on current state
 func (t *Timeline) buildFooterHelp(width int) string {
 	trim := &t.player.Trim
+	sections := t.player.Sections
 
 	// Modern, minimal styling - subtle grays with one accent
 	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
@@ -198,25 +232,25 @@ func (t *Timeline) buildFooterHelp(width int) string {
 
 	sep := dimStyle.Render("  ·  ")
 
+	sectionBadge := ""
+	if len(sections) > 0 {
+		sectionBadge = dimStyle.Render(fmt.Sprintf("%d section(s)", len(sections))) + "  "
+	}
+
 	var result string
 
 	if t.exportStatus != "" {
 		result = " " + t.exportStatus
-	} else if trim.IsComplete() {
-		trimDur := formatDuration(trim.Duration())
-		result = " " + dimStyle.Render("["+trimDur+"]") + "  " +
+	} else if len(sections) > 0 && trim.InPoint == nil {
+		result = " " + sectionBadge +
 			kd("Enter", "export", true) + sep +
-			kd("p", "preview", false) + sep +
+			kd("i", "in", false) + "  " + kd("o", "out", false) + sep +
+			kd("X", "remove section", false) + sep +
 			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + sep +
-			kd("d", "clear", false) + "  " + kd("?", "help", false)
+			kd("?", "help", false)
 	} else if trim.InPoint != nil {
-		result = " " + dimStyle.Render("IN set") + "  " +
+		result = " " + sectionBadge + dimStyle.Render("IN set") + "  " +
 			kd("o", "set out", true) + sep +
-			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + sep +
-			kd("d", "clear", false) + "  " + kd("?", "help", false)
-	} else if trim.OutPoint != nil {
-		result = " " + dimStyle.Render("OUT set") + "  " +
-			kd("i", "set in", true) + sep +
 			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + sep +
 			kd("d", "clear", false) + "  " + kd("?", "help", false)
 	} else {

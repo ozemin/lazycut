@@ -11,6 +11,15 @@ import (
 	"time"
 )
 
+type Section struct {
+	In  time.Duration
+	Out time.Duration
+}
+
+func (s Section) Duration() time.Duration {
+	return s.Out - s.In
+}
+
 type TrimState struct {
 	InPoint  *time.Duration
 	OutPoint *time.Duration
@@ -69,7 +78,22 @@ type Player struct {
 	// Audio playback
 	audioPlayer *AudioPlayer
 
-	Trim TrimState
+	Trim     TrimState
+	Sections []Section
+}
+
+func (p *Player) AddSection(in, out time.Duration) {
+	p.Sections = append(p.Sections, Section{In: in, Out: out})
+}
+
+func (p *Player) RemoveLastSection() {
+	if len(p.Sections) > 0 {
+		p.Sections = p.Sections[:len(p.Sections)-1]
+	}
+}
+
+func (p *Player) ClearSections() {
+	p.Sections = nil
 }
 
 func NewPlayer(path string) (*Player, error) {

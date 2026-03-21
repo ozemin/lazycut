@@ -11,6 +11,187 @@ import (
 	"time"
 )
 
+type MultiExportOptions struct {
+	Input       string
+	Output      string
+	Sections    []Section
+	AspectRatio AspectRatio
+	Width       int
+	Height      int
+}
+
+// ExportSeparate exports each section as a numbered individual file.
+func ExportSeparate(opts MultiExportOptions, progress chan<- float64) ([]string, error) {
+	defer close(progress)
+
+	total := len(opts.Sections)
+	if total == 0 {
+		return nil, fmt.Errorf("no sections to export")
+	}
+
+	base, ext := outputBaseAndExt(opts.Input, opts.Output)
+	dir := filepath.Dir(opts.Input)
+	if opts.Output != "" && filepath.IsAbs(opts.Output) {
+		dir = filepath.Dir(opts.Output)
+	}
+
+	var outputs []string
+	for i, sec := range opts.Sections {
+		numberedOut := filepath.Join(dir, fmt.Sprintf("%s_%03d%s", base, i+1, ext))
+
+		sectionProgress := make(chan float64, 100)
+		done := make(chan struct{})
+		go func(ch <-chan float64, idx int) {
+			defer close(done)
+			for p := range ch {
+				combined := (float64(idx) + p) / float64(total)
+				select {
+				case progress <- combined:
+				default:
+				}
+			}
+		}(sectionProgress, i)
+
+		singleOpts := ExportOptions{
+			Input:       opts.Input,
+			Output:      numberedOut,
+			InPoint:     sec.In,
+			OutPoint:    sec.Out,
+			AspectRatio: opts.AspectRatio,
+			Width:       opts.Width,
+			Height:      opts.Height,
+		}
+		out, err := ExportWithProgress(singleOpts, sectionProgress)
+		<-done // wait for goroutine to finish forwarding before continuing
+		if err != nil {
+			return outputs, fmt.Errorf("section %d: %w", i+1, err)
+		}
+		outputs = append(outputs, out)
+	}
+
+	return outputs, nil
+}
+
+// ExportConcatenated exports all sections into a single concatenated file.
+// It uses a two-pass approach: export each section to a temp file, then concat.
+func ExportConcatenated(opts MultiExportOptions, progress chan<- float64) (string, error) {
+	defer close(progress)
+
+	total := len(opts.Sections)
+	if total == 0 {
+		return "", fmt.Errorf("no sections to export")
+	}
+
+	ext := filepath.Ext(opts.Input)
+	if opts.Output != "" && filepath.Ext(opts.Output) != "" {
+		ext = filepath.Ext(opts.Output)
+	}
+
+	// Pass 1: export each section to a temp file (90% of progress)
+	var tempFiles []string
+	for i, sec := range opts.Sections {
+		tmpFile, err := os.CreateTemp("", fmt.Sprintf("lazycut_section_%03d_*%s", i+1, ext))
+		if err != nil {
+			cleanupFiles(tempFiles)
+			return "", fmt.Errorf("failed to create temp file: %w", err)
+		}
+		tmpPath := tmpFile.Name()
+		tmpFile.Close()
+		tempFiles = append(tempFiles, tmpPath)
+
+		sectionProgress := make(chan float64, 100)
+		go func(ch <-chan float64, idx int) {
+			for p := range ch {
+				combined := (float64(idx) + p) / float64(total) * 0.9
+				select {
+				case progress <- combined:
+				default:
+				}
+			}
+		}(sectionProgress, i)
+
+		singleOpts := ExportOptions{
+			Input:       opts.Input,
+			Output:      tmpPath,
+			InPoint:     sec.In,
+			OutPoint:    sec.Out,
+			AspectRatio: opts.AspectRatio,
+			Width:       opts.Width,
+			Height:      opts.Height,
+		}
+		if _, err := ExportWithProgress(singleOpts, sectionProgress); err != nil {
+			cleanupFiles(tempFiles)
+			return "", fmt.Errorf("section %d: %w", i+1, err)
+		}
+	}
+
+	// Pass 2: write concat list and merge (final 10% of progress)
+	listFile, err := os.CreateTemp("", "lazycut_concat_*.txt")
+	if err != nil {
+		cleanupFiles(tempFiles)
+		return "", fmt.Errorf("failed to create concat list: %w", err)
+	}
+	listPath := listFile.Name()
+	defer os.Remove(listPath)
+
+	for _, f := range tempFiles {
+		fmt.Fprintf(listFile, "file '%s'\n", f)
+	}
+	listFile.Close()
+
+	output := opts.Output
+	if output == "" {
+		output = generateOutputName(opts.Input)
+	} else {
+		dir := filepath.Dir(opts.Input)
+		outExt := filepath.Ext(opts.Output)
+		if outExt == "" {
+			output = output + ext
+		}
+		if !filepath.IsAbs(output) {
+			output = filepath.Join(dir, output)
+		}
+	}
+
+	cmd := exec.Command("ffmpeg", "-y",
+		"-f", "concat",
+		"-safe", "0",
+		"-i", listPath,
+		"-c", "copy",
+		output,
+	)
+	if err := cmd.Run(); err != nil {
+		cleanupFiles(tempFiles)
+		return "", fmt.Errorf("concat failed: %w", err)
+	}
+
+	cleanupFiles(tempFiles)
+	progress <- 1.0
+	return output, nil
+}
+
+func outputBaseAndExt(input, output string) (base, ext string) {
+	ext = filepath.Ext(input)
+	if output != "" {
+		outExt := filepath.Ext(output)
+		if outExt != "" {
+			ext = outExt
+			base = strings.TrimSuffix(filepath.Base(output), outExt)
+		} else {
+			base = filepath.Base(output)
+		}
+	} else {
+		base = strings.TrimSuffix(filepath.Base(input), ext) + "_trimmed"
+	}
+	return base, ext
+}
+
+func cleanupFiles(paths []string) {
+	for _, p := range paths {
+		os.Remove(p)
+	}
+}
+
 type AspectRatio int
 
 const (
