@@ -50,6 +50,10 @@ type Model struct {
 
     // Vim-style input
     repeatCount int
+
+	// Preview queue for multi-section playback
+	previewQueue    []video.Section
+	previewQueueIdx int
 }
 
 type trimSnapshot struct {
@@ -127,10 +131,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case TickMsg:
-		if m.previewMode && m.player.IsPlaying() {
-			if m.player.Trim.OutPoint != nil && m.player.Position() >= *m.player.Trim.OutPoint {
-				m.player.Pause()
-				m.previewMode = false
+		if m.previewMode && m.player.IsPlaying() && len(m.previewQueue) > 0 {
+			current := m.previewQueue[m.previewQueueIdx]
+			if m.player.Position() >= current.Out {
+				next := m.previewQueueIdx + 1
+				if next < len(m.previewQueue) {
+					m.previewQueueIdx = next
+					m.player.Seek(m.previewQueue[next].In)
+				} else {
+					m.player.Pause()
+					m.previewMode = false
+					m.previewQueue = nil
+					m.previewQueueIdx = 0
+				}
 			}
 		}
 		return m, tickCmd()
@@ -235,8 +248,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "p":
-			if m.player.Trim.InPoint != nil {
-				m.player.Seek(*m.player.Trim.InPoint)
+			// Preview all sections in order (or active trim if still in progress)
+			var queue []video.Section
+			if m.player.Trim.InPoint != nil && m.player.Trim.OutPoint != nil {
+				queue = []video.Section{{In: *m.player.Trim.InPoint, Out: *m.player.Trim.OutPoint}}
+			} else if len(m.player.Sections) > 0 {
+				queue = make([]video.Section, len(m.player.Sections))
+				copy(queue, m.player.Sections)
+			}
+			if len(queue) > 0 {
+				m.previewQueue = queue
+				m.previewQueueIdx = 0
+				m.player.Seek(queue[0].In)
+				m.previewMode = true
+				m.player.Play()
+			}
+			return m, nil
+
+		case "P":
+			// Preview the last committed section only
+			if n := len(m.player.Sections); n > 0 {
+				last := m.player.Sections[n-1]
+				m.previewQueue = []video.Section{last}
+				m.previewQueueIdx = 0
+				m.player.Seek(last.In)
 				m.previewMode = true
 				m.player.Play()
 			}
@@ -517,7 +552,8 @@ func (m Model) renderHelpModal(_ string) string {
 		kd("i", "Set in-point") + "\n" +
 		kd("o", "Set out-point") + "\n" +
 		kd("X", "Remove last section") + "\n" +
-		kd("p", "Preview selection") + "\n" +
+		kd("p", "Preview all sections") + "\n" +
+		kd("P", "Preview last section") + "\n" +
 		kd("d / Esc", "Clear selection") + "\n" +
 		kd("Enter", "Export")
 

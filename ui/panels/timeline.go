@@ -245,7 +245,23 @@ func (t *Timeline) buildFooterHelp(width int) string {
 		result = " " + sectionBadge +
 			kd("Enter", "export", true) + sep +
 			kd("i", "in", false) + "  " + kd("o", "out", false) + sep +
-			kd("X", "remove section", false) + sep +
+			kd("X", func() string {
+				if len(sections) > 1 {
+					return "remove last section"
+				}
+				return "remove section"
+			}(), false) + sep +
+			kd("p", func() string {
+				if len(sections) > 1 {
+					return "preview all"
+				}
+				return "preview"
+			}(), false) + func() string {
+				if len(sections) > 1 {
+					return "  " + kd("P", "preview last", false)
+				}
+				return ""
+			}() + sep +
 			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + sep +
 			kd("?", "help", false)
 	} else if trim.InPoint != nil {
