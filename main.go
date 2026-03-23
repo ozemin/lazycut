@@ -7,11 +7,17 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 var version = "dev"
 
 func main() {
+	if _, ok := os.LookupEnv("NO_COLOR"); ok {
+		lipgloss.SetColorProfile(termenv.Ascii)
+	}
+
 	args := os.Args[1:]
 
 	if len(args) == 0 {

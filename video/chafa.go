@@ -2,6 +2,7 @@ package video
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 )
 
@@ -47,11 +48,15 @@ var ChafaPresets = map[QualityPreset]ChafaConfig{
 }
 
 func (c ChafaConfig) BuildArgs(width, height int) []string {
+	colors := c.Colors
+	if _, ok := os.LookupEnv("NO_COLOR"); ok {
+		colors = "none"
+	}
 	return []string{
 		"--probe=off",
 		"--format=symbols",
 		"--size", fmt.Sprintf("%dx%d", width, height),
-		"--colors", c.Colors,
+		"--colors", colors,
 		"-O", strconv.Itoa(c.Optimize),
 		"--work", strconv.Itoa(c.Work),
 		"--color-space", c.ColorSpace,
