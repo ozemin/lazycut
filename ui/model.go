@@ -44,11 +44,11 @@ type Model struct {
 	exportProgress     float64
 	exportProgressChan <-chan float64
 
-    showHelpModal bool
-    undoStack     []trimSnapshot
+	showHelpModal bool
+	undoStack     []trimSnapshot
 
-    // Vim-style input
-    repeatCount int
+	// Vim-style input
+	repeatCount int
 }
 
 type trimSnapshot struct {
@@ -163,42 +163,54 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "h":
 			n := m.repeatCount
-			if n <= 0 { n = 1 }
+			if n <= 0 {
+				n = 1
+			}
 			m.player.Seek(pos - time.Duration(n)*time.Second)
 			m.repeatCount = 0
 			return m, nil
 
 		case "l":
 			n := m.repeatCount
-			if n <= 0 { n = 1 }
+			if n <= 0 {
+				n = 1
+			}
 			m.player.Seek(pos + time.Duration(n)*time.Second)
 			m.repeatCount = 0
 			return m, nil
 
 		case "H":
 			n := m.repeatCount
-			if n <= 0 { n = 1 }
+			if n <= 0 {
+				n = 1
+			}
 			m.player.Seek(pos - time.Duration(n*5)*time.Second)
 			m.repeatCount = 0
 			return m, nil
 
 		case "L":
 			n := m.repeatCount
-			if n <= 0 { n = 1 }
+			if n <= 0 {
+				n = 1
+			}
 			m.player.Seek(pos + time.Duration(n*5)*time.Second)
 			m.repeatCount = 0
 			return m, nil
 
 		case ",":
 			n := m.repeatCount
-			if n <= 0 { n = 1 }
+			if n <= 0 {
+				n = 1
+			}
 			m.player.Seek(pos - time.Duration(n)*frameDuration)
 			m.repeatCount = 0
 			return m, nil
 
 		case ".":
 			n := m.repeatCount
-			if n <= 0 { n = 1 }
+			if n <= 0 {
+				n = 1
+			}
 			m.player.Seek(pos + time.Duration(n)*frameDuration)
 			m.repeatCount = 0
 			return m, nil
@@ -269,14 +281,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func renderPanel(content, title string, width, height int) string {
-    innerWidth := width - 2
-    innerHeight := height - 2
+	innerWidth := width - 2
+	innerHeight := height - 2
 
-    // Combine title and content only if title provided
-    inner := content
-    if strings.TrimSpace(title) != "" {
-        inner = title + "\n" + content
-    }
+	// Combine title and content only if title provided
+	inner := content
+	if strings.TrimSpace(title) != "" {
+		inner = title + "\n" + content
+	}
 	lines := strings.Split(inner, "\n")
 	for len(lines) < innerHeight {
 		lines = append(lines, "")
@@ -304,17 +316,17 @@ func (m Model) View() string {
 			Render("Terminal too small")
 	}
 
-    previewContent := m.preview.Render(dims.PreviewContentWidth, dims.PreviewContentHeight)
-    previewPanel := renderPanel(previewContent, "", dims.PreviewWidth, dims.PreviewHeight)
+	previewContent := m.preview.Render(dims.PreviewContentWidth, dims.PreviewContentHeight)
+	previewPanel := renderPanel(previewContent, "", dims.PreviewWidth, dims.PreviewHeight)
 
-    propertiesContent := m.properties.Render(dims.PropertiesContentWidth, dims.PropertiesContentHeight)
-    propertiesPanel := renderPanel(propertiesContent, "", dims.PropertiesWidth, dims.PropertiesHeight)
+	propertiesContent := m.properties.Render(dims.PropertiesContentWidth, dims.PropertiesContentHeight)
+	propertiesPanel := renderPanel(propertiesContent, "", dims.PropertiesWidth, dims.PropertiesHeight)
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, previewPanel, propertiesPanel)
 
-    m.timeline.SetExportStatus(m.exportStatus)
-    timelineContent := m.timeline.Render(dims.TimelineContentWidth, dims.TimelineContentHeight)
-    timelinePanel := renderPanel(timelineContent, "", dims.TimelineWidth, dims.TimelineHeight)
+	m.timeline.SetExportStatus(m.exportStatus)
+	timelineContent := m.timeline.Render(dims.TimelineContentWidth, dims.TimelineContentHeight)
+	timelinePanel := renderPanel(timelineContent, "", dims.TimelineWidth, dims.TimelineHeight)
 
 	base := lipgloss.JoinVertical(lipgloss.Left, topRow, timelinePanel)
 
@@ -329,7 +341,7 @@ func (m Model) View() string {
 }
 
 func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-    switch msg.Type {
+	switch msg.Type {
 	case tea.KeyEsc:
 		if !m.exporting {
 			m.showExportModal = false
@@ -389,34 +401,38 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-    default:
-        // Vim-style navigation aliases in modal
-        switch msg.String() {
-        case "j":
-            if m.exportFocusField < 1 { m.exportFocusField++ }
-            return m, nil
-        case "k":
-            if m.exportFocusField > 0 { m.exportFocusField-- }
-            return m, nil
-        case "h":
-            if m.exportFocusField == 1 {
-                m.exportAspectRatio--
-                if m.exportAspectRatio < 0 {
-                    m.exportAspectRatio = len(video.AspectRatioOptions) - 1
-                }
-            }
-            return m, nil
-        case "l":
-            if m.exportFocusField == 1 {
-                m.exportAspectRatio = (m.exportAspectRatio + 1) % len(video.AspectRatioOptions)
-            }
-            return m, nil
-        }
-        if m.exportFocusField == 0 && len(msg.Runes) > 0 {
-            m.exportFilename += string(msg.Runes)
-        }
-        return m, nil
-    }
+	default:
+		// Vim-style navigation aliases in modal
+		switch msg.String() {
+		case "j":
+			if m.exportFocusField < 1 {
+				m.exportFocusField++
+			}
+			return m, nil
+		case "k":
+			if m.exportFocusField > 0 {
+				m.exportFocusField--
+			}
+			return m, nil
+		case "h":
+			if m.exportFocusField == 1 {
+				m.exportAspectRatio--
+				if m.exportAspectRatio < 0 {
+					m.exportAspectRatio = len(video.AspectRatioOptions) - 1
+				}
+			}
+			return m, nil
+		case "l":
+			if m.exportFocusField == 1 {
+				m.exportAspectRatio = (m.exportAspectRatio + 1) % len(video.AspectRatioOptions)
+			}
+			return m, nil
+		}
+		if m.exportFocusField == 0 && len(msg.Runes) > 0 {
+			m.exportFilename += string(msg.Runes)
+		}
+		return m, nil
+	}
 
 	return m, nil
 }

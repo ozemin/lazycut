@@ -40,6 +40,13 @@ go build
 lazycut <video-file>
 ```
 
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `-h`, `--help` | Show help |
+| `-v`, `--version` | Show version |
+
 ### Keyboard Shortcuts
 
 | Key | Action |
@@ -47,9 +54,17 @@ lazycut <video-file>
 | `Space` | Play/Pause |
 | `h` / `l` | Seek ±1s |
 | `H` / `L` | Seek ±5s |
+| `,` / `.` | Seek ±1 frame |
+| `0` | Go to start |
+| `G` / `$` | Go to end |
 | `i` / `o` | Set in/out points |
+| `p` | Preview selection |
+| `d` / `Esc` | Clear selection |
 | `Enter` | Export |
+| `u` | Undo last trim change |
+| `m` | Toggle mute |
+| `Tab` | Cycle preview quality |
 | `?` | Help |
 | `q` | Quit |
 
-Repeat counts work: `5l` = seek forward 5 seconds.
+Repeat counts work for seek controls: `5l` = seek forward 5 seconds, `10.` = step forward 10 frames.
