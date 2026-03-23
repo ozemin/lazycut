@@ -38,6 +38,7 @@ func NewFrameStream(path string, start time.Duration, width, height, fps, videoW
 	filters = append(filters, fmt.Sprintf("fps=%d", fps))
 
 	args := []string{
+		"-re",
 		"-ss", fmt.Sprintf("%.3f", start.Seconds()),
 		"-i", path,
 		"-vf", strings.Join(filters, ","),

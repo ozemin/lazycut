@@ -115,8 +115,9 @@ func (p *Player) Play() error {
 	}
 	p.playing = true
 	p.stopChan = make(chan struct{})
-	if p.fps > 0 {
-		p.frameInterval = time.Second / time.Duration(p.fps)
+	previewFPS := p.properties.PreviewFPS()
+	if previewFPS > 0 {
+		p.frameInterval = time.Second / time.Duration(previewFPS)
 	} else {
 		p.frameInterval = time.Second / 24
 	}
