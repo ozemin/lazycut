@@ -12,7 +12,6 @@ type CacheKey struct {
 	Position time.Duration
 	Width    int
 	Height   int
-	Quality  QualityPreset
 }
 
 type cacheEntry struct {
@@ -40,7 +39,6 @@ func NewFrameCache(capacity int, fps float64) *FrameCache {
 	}
 }
 
-// quantizePosition rounds position to nearest frame boundary based on FPS
 func (c *FrameCache) quantizePosition(position time.Duration) time.Duration {
 	if c.fps <= 0 {
 		return position
@@ -50,7 +48,7 @@ func (c *FrameCache) quantizePosition(position time.Duration) time.Duration {
 	return time.Duration(frameIndex) * frameDuration
 }
 
-func (c *FrameCache) Get(position time.Duration, width, height int, quality QualityPreset) (string, bool) {
+func (c *FrameCache) Get(position time.Duration, width, height int) (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -58,7 +56,6 @@ func (c *FrameCache) Get(position time.Duration, width, height int, quality Qual
 		Position: c.quantizePosition(position),
 		Width:    width,
 		Height:   height,
-		Quality:  quality,
 	}
 
 	if elem, ok := c.items[key]; ok {
@@ -68,7 +65,7 @@ func (c *FrameCache) Get(position time.Duration, width, height int, quality Qual
 	return "", false
 }
 
-func (c *FrameCache) Put(position time.Duration, width, height int, quality QualityPreset, frame string) {
+func (c *FrameCache) Put(position time.Duration, width, height int, frame string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -76,7 +73,6 @@ func (c *FrameCache) Put(position time.Duration, width, height int, quality Qual
 		Position: c.quantizePosition(position),
 		Width:    width,
 		Height:   height,
-		Quality:  quality,
 	}
 
 	if elem, ok := c.items[key]; ok {
@@ -96,24 +92,4 @@ func (c *FrameCache) Put(position time.Duration, width, height int, quality Qual
 	entry := &cacheEntry{key: key, frame: frame}
 	elem := c.order.PushFront(entry)
 	c.items[key] = elem
-}
-
-func (c *FrameCache) Clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.items = make(map[CacheKey]*list.Element)
-	c.order.Init()
-}
-
-func (c *FrameCache) Len() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.order.Len()
-}
-
-func (c *FrameCache) SetFPS(fps float64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.fps = fps
 }

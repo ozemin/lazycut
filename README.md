@@ -22,7 +22,6 @@ Extract and add to your PATH, or run directly.
 
 **Dependencies:**
 - ffmpeg: `winget install ffmpeg` or download from [ffmpeg.org](https://ffmpeg.org)
-- chafa: Install via [Scoop](https://scoop.sh): `scoop install chafa`
 
 ### Build from source
 
@@ -63,7 +62,6 @@ lazycut <video-file>
 | `Enter` | Export |
 | `u` | Undo last trim change |
 | `m` | Toggle mute |
-| `Tab` | Cycle preview quality |
 | `?` | Help |
 | `q` | Quit |
 

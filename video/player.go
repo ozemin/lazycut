@@ -6,10 +6,17 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 )
+
+const frameBufferSize = 15
+
+type bufferedFrame struct {
+	frame   string
+	pos     time.Duration
+	version int
+}
 
 type TrimState struct {
 	InPoint  *time.Duration
@@ -55,13 +62,16 @@ type Player struct {
 	width      int
 	height     int
 	properties *VideoProperties
-	quality    QualityPreset
+
+	previewFPS int
 
 	mu            sync.Mutex
 	currentFrame  string
 	stopChan      chan struct{}
 	stream        *FrameStream
 	frameInterval time.Duration
+	frameBuffer   chan bufferedFrame
+	seekVersion   int
 
 	// Optimization: Frame cache
 	cache *FrameCache
@@ -72,10 +82,14 @@ type Player struct {
 	Trim TrimState
 }
 
-func NewPlayer(path string) (*Player, error) {
+func NewPlayer(path string, previewFPS int) (*Player, error) {
 	props, err := GetVideoProperties(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get video info: %w", err)
+	}
+
+	if previewFPS <= 0 {
+		previewFPS = 24
 	}
 
 	return &Player{
@@ -85,7 +99,7 @@ func NewPlayer(path string) (*Player, error) {
 		playing:     false,
 		fps:         int(props.FPS),
 		properties:  props,
-		quality:     QualityHigh,
+		previewFPS:  previewFPS,
 		stopChan:    make(chan struct{}),
 		cache:       NewFrameCache(DefaultCacheCapacity, props.FPS),
 		audioPlayer: NewAudioPlayer(path),
@@ -98,12 +112,11 @@ func (p *Player) SetSize(width, height int) {
 	p.width = width
 	p.height = height
 	pos := p.position
-	quality := p.quality
 	playing := p.playing
 	p.mu.Unlock()
 
 	if !playing && width > 0 && height > 0 && (width != oldWidth || height != oldHeight) {
-		p.renderFrameCached(pos, width, height, quality)
+		p.renderFrameCached(pos, width, height)
 	}
 }
 
@@ -115,19 +128,16 @@ func (p *Player) Play() error {
 	}
 	p.playing = true
 	p.stopChan = make(chan struct{})
-	previewFPS := p.properties.PreviewFPS()
-	if previewFPS > 0 {
-		p.frameInterval = time.Second / time.Duration(previewFPS)
-	} else {
-		p.frameInterval = time.Second / 24
-	}
+	p.frameInterval = time.Second / time.Duration(p.previewFPS)
 	pos := p.position
+	p.frameBuffer = make(chan bufferedFrame, frameBufferSize)
 	p.mu.Unlock()
 
 	// Start audio playback
 	p.audioPlayer.Start(pos.Seconds())
 
-	go p.playbackLoop()
+	go p.renderLoop()
+	go p.displayLoop()
 	return nil
 }
 
@@ -143,7 +153,6 @@ func (p *Player) Pause() {
 	p.stream = nil
 	pos := p.position
 	width, height := p.width, p.height
-	quality := p.quality
 	p.mu.Unlock()
 
 	// Stop audio playback
@@ -154,7 +163,7 @@ func (p *Player) Pause() {
 	}
 
 	if width > 0 && height > 0 {
-		p.renderFrameCached(pos, width, height, quality)
+		p.renderFrameCached(pos, width, height)
 	}
 }
 
@@ -191,8 +200,10 @@ func (p *Player) Seek(position time.Duration) {
 		position = p.duration
 	}
 	p.position = position
+	if p.playing {
+		p.seekVersion++
+	}
 	width, height := p.width, p.height
-	quality := p.quality
 	playing := p.playing
 	stream := p.stream
 	p.stream = nil
@@ -211,7 +222,7 @@ func (p *Player) Seek(position time.Duration) {
 	}
 
 	if !playing && width > 0 && height > 0 {
-		p.renderFrameCached(position, width, height, quality)
+		p.renderFrameCached(position, width, height)
 	}
 }
 
@@ -237,27 +248,6 @@ func (p *Player) CurrentFrame() string {
 	return p.currentFrame
 }
 
-func (p *Player) Quality() QualityPreset {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.quality
-}
-
-func (p *Player) CycleQuality() QualityPreset {
-	p.mu.Lock()
-	p.quality = p.quality.Next()
-	newQuality := p.quality
-	pos := p.position
-	width, height := p.width, p.height
-	playing := p.playing
-	p.mu.Unlock()
-
-	if !playing && width > 0 && height > 0 {
-		p.renderFrameCached(pos, width, height, newQuality)
-	}
-	return newQuality
-}
-
 func (p *Player) Close() {
 	p.Pause()
 	p.audioPlayer.Stop()
@@ -271,12 +261,16 @@ func (p *Player) IsMuted() bool {
 	return p.audioPlayer.IsMuted()
 }
 
-func (p *Player) playbackLoop() {
+// renderLoop is the producer goroutine: fetches and renders frames into frameBuffer ahead of playback.
+func (p *Player) renderLoop() {
 	var currentStream *FrameStream
+	var renderPos time.Duration
+
 	defer func() {
 		if currentStream != nil {
 			currentStream.Close()
 		}
+		close(p.frameBuffer)
 	}()
 
 	for {
@@ -293,30 +287,39 @@ func (p *Player) playbackLoop() {
 		}
 		width := p.width
 		height := p.height
-		quality := p.quality
-		pos := p.position
-		frameInterval := p.frameInterval
 		fps := p.fps
+		frameInterval := p.frameInterval
+		version := p.seekVersion
+		streamWasReset := p.stream == nil && currentStream != nil
 		p.mu.Unlock()
 
 		if width <= 0 || height <= 0 {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-
 		if fps <= 0 {
 			fps = 24
 		}
 
-		// Use preview parameters for smooth playback
-		previewFPS := p.properties.PreviewFPS()
+		previewFPS := p.previewFPS
 		videoWidth := p.properties.Width
+		videoHeight := p.properties.Height
+
+		// Seek detected or first start
+		if streamWasReset {
+			currentStream.Close()
+			currentStream = nil
+		}
 
 		if currentStream == nil || currentStream.NeedsRestart(width, height, previewFPS, videoWidth) {
 			if currentStream != nil {
 				currentStream.Close()
 			}
-			stream, err := NewFrameStream(p.path, pos, width, height, previewFPS, videoWidth)
+			p.mu.Lock()
+			renderPos = p.position
+			p.mu.Unlock()
+
+			stream, err := NewFrameStream(p.path, renderPos, width, height, previewFPS, videoWidth, videoHeight)
 			if err != nil {
 				time.Sleep(20 * time.Millisecond)
 				continue
@@ -324,6 +327,7 @@ func (p *Player) playbackLoop() {
 			currentStream = stream
 			p.mu.Lock()
 			p.stream = stream
+			version = p.seekVersion
 			p.mu.Unlock()
 		}
 
@@ -331,124 +335,129 @@ func (p *Player) playbackLoop() {
 		if err != nil {
 			currentStream.Close()
 			currentStream = nil
+			if renderPos >= p.duration-frameInterval {
+				return // natural EOF
+			}
 			continue
 		}
 
-		frame, err := p.renderFrameFromBytes(frameBytes, width, height, quality)
+		pixW, pixH := currentStream.PixelDimensions()
+		frame, err := p.renderFrameFromPixels(frameBytes, pixW, pixH, width, height)
 		if err != nil {
+			renderPos += frameInterval
 			continue
 		}
 
-		p.cache.Put(pos, width, height, quality, frame)
+		p.cache.Put(renderPos, width, height, frame)
+
+		select {
+		case p.frameBuffer <- bufferedFrame{frame: frame, pos: renderPos, version: version}:
+		case <-p.stopChan:
+			return
+		}
+
+		renderPos += frameInterval
+	}
+}
+
+// displayLoop is the consumer goroutine: reads pre-rendered frames and displays them at the correct rate.
+func (p *Player) displayLoop() {
+	p.mu.Lock()
+	frameInterval := p.frameInterval
+	p.mu.Unlock()
+
+	for {
+		var item bufferedFrame
+		select {
+		case f, ok := <-p.frameBuffer:
+			if !ok {
+				// Channel closed = end of video or stop
+				p.mu.Lock()
+				if p.playing {
+					p.position = p.duration
+					p.playing = false
+				}
+				p.mu.Unlock()
+				p.audioPlayer.Stop()
+				return
+			}
+			item = f
+		case <-p.stopChan:
+			return
+		}
+
+		displayStart := time.Now()
+
 		p.mu.Lock()
+		if item.version < p.seekVersion {
+			// Stale frame from before a seek — discard
+			p.mu.Unlock()
+			continue
+		}
 		if !p.playing {
 			p.mu.Unlock()
 			return
 		}
-		p.currentFrame = frame
-		p.position += frameInterval
-		if p.position >= p.duration {
-			p.position = p.duration
-			p.playing = false
-			if currentStream != nil {
-				currentStream.Close()
-				currentStream = nil
-				p.stream = nil
-			}
-			p.mu.Unlock()
-			// Stop audio when playback ends
-			p.audioPlayer.Stop()
-			return
-		}
+		p.currentFrame = item.frame
+		p.position = item.pos
 		p.mu.Unlock()
+
+		// Sleep remaining time to maintain target frame rate
+		elapsed := time.Since(displayStart)
+		if sleep := frameInterval - elapsed; sleep > 0 {
+			select {
+			case <-time.After(sleep):
+			case <-p.stopChan:
+				return
+			}
+		}
 	}
 }
 
 // renderFrameCached renders a frame using cache
-func (p *Player) renderFrameCached(position time.Duration, width, height int, quality QualityPreset) {
-	// Check cache first
-	if frame, ok := p.cache.Get(position, width, height, quality); ok {
+func (p *Player) renderFrameCached(position time.Duration, width, height int) {
+	if frame, ok := p.cache.Get(position, width, height); ok {
 		p.mu.Lock()
 		p.currentFrame = frame
 		p.mu.Unlock()
 		return
 	}
 
-	// Cache miss - render
 	frame, err := p.renderFrame(position, width, height)
 	if err != nil {
 		return
 	}
-	p.cache.Put(position, width, height, quality, frame)
+	p.cache.Put(position, width, height, frame)
 	p.mu.Lock()
 	p.currentFrame = frame
 	p.mu.Unlock()
 }
 
 func (p *Player) renderFrame(position time.Duration, width, height int) (string, error) {
-	p.mu.Lock()
-	config := ChafaPresets[p.quality]
-	p.mu.Unlock()
-
-	// Build filter chain with preview parameters
-	previewFPS := p.properties.PreviewFPS()
-	var filters []string
-	if p.properties.NeedsScaling() {
-		filters = append(filters, "scale=1920:-1:flags=fast_bilinear")
-	}
-	filters = append(filters, fmt.Sprintf("fps=%d", previewFPS))
+	pixW, pixH := computePixelDimensions(width, height, p.properties.Width, p.properties.Height)
 
 	ffmpegCmd := exec.Command("ffmpeg",
 		"-ss", fmt.Sprintf("%.3f", position.Seconds()),
 		"-i", p.path,
-		"-vf", strings.Join(filters, ","),
+		"-vf", fmt.Sprintf("scale=%d:%d:flags=fast_bilinear", pixW, pixH),
 		"-vframes", "1",
-		"-f", "image2pipe",
-		"-vcodec", "bmp",
+		"-f", "rawvideo",
+		"-pix_fmt", "rgba",
 		"-loglevel", "error",
 		"-",
 	)
 
-	chafaArgs := config.BuildArgs(width, height)
-	chafaCmd := exec.Command("chafa", chafaArgs...)
-
-	pipe, err := ffmpegCmd.StdoutPipe()
-	if err != nil {
-		return "", err
-	}
-	chafaCmd.Stdin = pipe
-
-	var chafaOut bytes.Buffer
-	chafaCmd.Stdout = &chafaOut
-
-	if err := chafaCmd.Start(); err != nil {
-		return "", err
-	}
+	var pixelData bytes.Buffer
+	ffmpegCmd.Stdout = &pixelData
 	if err := ffmpegCmd.Run(); err != nil {
 		return "", err
 	}
-	if err := chafaCmd.Wait(); err != nil {
-		return "", err
-	}
 
-	return chafaOut.String(), nil
+	return p.renderFrameFromPixels(pixelData.Bytes(), pixW, pixH, width, height)
 }
 
-func (p *Player) renderFrameFromBytes(frame []byte, width, height int, quality QualityPreset) (string, error) {
-	config := ChafaPresets[quality]
-	chafaArgs := config.BuildArgs(width, height)
-	chafaCmd := exec.Command("chafa", chafaArgs...)
-
-	chafaCmd.Stdin = bytes.NewReader(frame)
-
-	var chafaOut bytes.Buffer
-	chafaCmd.Stdout = &chafaOut
-
-	if err := chafaCmd.Run(); err != nil {
-		return "", err
-	}
-
-	return chafaOut.String(), nil
+func (p *Player) renderFrameFromPixels(pixels []byte, pixW, pixH, termW, termH int) (string, error) {
+	return defaultChafaConfig.Render(pixels, pixW, pixH, termW, termH)
 }
 
 func getInstallCommand(packageName string) string {
@@ -469,7 +478,6 @@ func getInstallCommand(packageName string) string {
 		// Map package names for Windows winget
 		wingetPackages := map[string]string{
 			"ffmpeg": "Gyan.FFmpeg",
-			"chafa":  "chafa",
 		}
 		if wingetName, ok := wingetPackages[packageName]; ok {
 			return fmt.Sprintf("winget install %s", wingetName)
@@ -490,9 +498,6 @@ func CheckDependencies() error {
 	}
 	if _, err := exec.LookPath("ffplay"); err != nil {
 		return fmt.Errorf("ffplay not found. Install: %s", getInstallCommand("ffmpeg"))
-	}
-	if _, err := exec.LookPath("chafa"); err != nil {
-		return fmt.Errorf("chafa not found. Install: %s", getInstallCommand("chafa"))
 	}
 	return nil
 }

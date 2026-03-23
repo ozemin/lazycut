@@ -11,11 +11,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const (
-	PanelPreview = iota
-	PanelTimeline
-)
-
 type TickMsg time.Time
 
 type ExportDoneMsg struct {
@@ -38,8 +33,8 @@ type Model struct {
 
 	showExportModal    bool
 	exportFilename     string
-	exportAspectRatio  int // index into video.AspectRatioOptions
-	exportFocusField   int // 0: filename, 1: aspect ratio
+	exportAspectRatio  int
+	exportFocusField   int
 	exporting          bool
 	exportProgress     float64
 	exportProgressChan <-chan float64
@@ -47,7 +42,6 @@ type Model struct {
 	showHelpModal bool
 	undoStack     []trimSnapshot
 
-	// Vim-style input
 	repeatCount int
 }
 
@@ -267,10 +261,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "tab":
-			m.player.CycleQuality()
-			return m, nil
-
 		case "m":
 			m.player.ToggleMute()
 			return m, nil
@@ -280,16 +270,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func renderPanel(content, title string, width, height int) string {
+func renderPanel(content string, width, height int) string {
 	innerWidth := width - 2
 	innerHeight := height - 2
-
-	// Combine title and content only if title provided
-	inner := content
-	if strings.TrimSpace(title) != "" {
-		inner = title + "\n" + content
-	}
-	lines := strings.Split(inner, "\n")
+	lines := strings.Split(content, "\n")
 	for len(lines) < innerHeight {
 		lines = append(lines, "")
 	}
@@ -317,24 +301,24 @@ func (m Model) View() string {
 	}
 
 	previewContent := m.preview.Render(dims.PreviewContentWidth, dims.PreviewContentHeight)
-	previewPanel := renderPanel(previewContent, "", dims.PreviewWidth, dims.PreviewHeight)
+	previewPanel := renderPanel(previewContent, dims.PreviewWidth, dims.PreviewHeight)
 
 	propertiesContent := m.properties.Render(dims.PropertiesContentWidth, dims.PropertiesContentHeight)
-	propertiesPanel := renderPanel(propertiesContent, "", dims.PropertiesWidth, dims.PropertiesHeight)
+	propertiesPanel := renderPanel(propertiesContent, dims.PropertiesWidth, dims.PropertiesHeight)
 
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, previewPanel, propertiesPanel)
 
 	m.timeline.SetExportStatus(m.exportStatus)
 	timelineContent := m.timeline.Render(dims.TimelineContentWidth, dims.TimelineContentHeight)
-	timelinePanel := renderPanel(timelineContent, "", dims.TimelineWidth, dims.TimelineHeight)
+	timelinePanel := renderPanel(timelineContent, dims.TimelineWidth, dims.TimelineHeight)
 
 	base := lipgloss.JoinVertical(lipgloss.Left, topRow, timelinePanel)
 
 	if m.showHelpModal {
-		return m.renderHelpModal(base)
+		return m.renderHelpModal()
 	}
 	if m.showExportModal {
-		return m.renderExportModal(base)
+		return m.renderExportModal()
 	}
 
 	return base
@@ -402,7 +386,6 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		// Vim-style navigation aliases in modal
 		switch msg.String() {
 		case "j":
 			if m.exportFocusField < 1 {
@@ -446,8 +429,7 @@ func (m Model) handleHelpModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) renderHelpModal(_ string) string {
-	// Modern, minimal styling
+func (m Model) renderHelpModal() string {
 	titleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("252")).
 		Bold(true)
@@ -461,7 +443,6 @@ func (m Model) renderHelpModal(_ string) string {
 	dimStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240"))
 
-	// Helper for key-description pairs
 	kd := func(key, desc string) string {
 		return keyStyle.Render(fmt.Sprintf("%-9s", key)) + descStyle.Render(desc)
 	}
@@ -474,8 +455,7 @@ func (m Model) renderHelpModal(_ string) string {
 		kd("0", "Go to start") + "\n" +
 		kd("G / $", "Go to end") + "\n" +
 		kd("5l 10.", "Vim-style counts") + "\n" +
-		kd("m", "Toggle mute") + "\n" +
-		kd("Tab", "Cycle quality")
+		kd("m", "Toggle mute")
 
 	trim := sectionStyle.Render("TRIM") + "\n" +
 		kd("i", "Set in-point") + "\n" +
@@ -527,8 +507,7 @@ func listenProgress(ch <-chan float64) tea.Cmd {
 	}
 }
 
-func (m Model) renderExportModal(_ string) string {
-	// Modern, minimal styling
+func (m Model) renderExportModal() string {
 	titleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("252")).
 		Bold(true)

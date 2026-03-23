@@ -144,26 +144,3 @@ func (p *VideoProperties) EstimateOutputSize(selectionDuration time.Duration) st
 	mb := float64(estimatedBytes) / (1024 * 1024)
 	return fmt.Sprintf("~%.1f MB", mb)
 }
-
-// PreviewFPS returns capped FPS for smooth preview (max 30fps)
-func (p *VideoProperties) PreviewFPS() int {
-	fps := int(p.FPS)
-	if fps > 30 {
-		return 30
-	}
-	return fps
-}
-
-// PreviewWidth returns width for preview scaling (max 1920px)
-// Returns -1 if no scaling needed
-func (p *VideoProperties) PreviewWidth() int {
-	if p.Width > 1920 {
-		return 1920
-	}
-	return -1
-}
-
-// NeedsScaling returns true if video needs downscaling for preview
-func (p *VideoProperties) NeedsScaling() bool {
-	return p.Width > 1920
-}

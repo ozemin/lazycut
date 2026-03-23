@@ -6,24 +6,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Preview represents the video preview panel
 type Preview struct {
 	player *video.Player
 }
 
-// NewPreview creates a new Preview panel
 func NewPreview(player *video.Player) *Preview {
 	return &Preview{
 		player: player,
 	}
 }
 
-// Render renders the preview panel
 func (p *Preview) Render(width, height int) string {
 	frame := p.player.CurrentFrame()
 
 	if frame == "" {
-		// Show placeholder when no frame available
 		placeholder := "Press SPACE to play"
 		if p.player.IsPlaying() {
 			placeholder = "Loading..."

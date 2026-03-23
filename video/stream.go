@@ -2,48 +2,76 @@ package video
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
 	"sync"
 	"time"
 )
 
-// FrameStream keeps a long-lived ffmpeg process that outputs scaled BMP frames.
+const rgbaChannels = 4
+
+// FrameStream keeps a long-lived ffmpeg process that outputs raw RGBA frames.
 type FrameStream struct {
-	cmd        *exec.Cmd
-	stdout     io.ReadCloser
-	cancel     context.CancelFunc
-	width      int
-	height     int
-	videoWidth int
-	targetFPS  int
-	mu         sync.Mutex
+	cmd         *exec.Cmd
+	stdout      io.ReadCloser
+	cancel      context.CancelFunc
+	width       int // terminal char width
+	height      int // terminal char height
+	pixelWidth  int // ffmpeg output pixel width
+	pixelHeight int // ffmpeg output pixel height
+	videoWidth  int // source video width (for NeedsRestart)
+	targetFPS   int
+	mu          sync.Mutex
 }
 
-func NewFrameStream(path string, start time.Duration, width, height, fps, videoWidth int) (*FrameStream, error) {
-	if width <= 0 || height <= 0 || fps <= 0 {
+// computePixelDimensions returns the pixel output size that preserves the
+// video's aspect ratio while fitting within termW*pixelScale × termH*pixelScale.
+func computePixelDimensions(termW, termH, videoW, videoH int) (int, int) {
+	const pixelScale = 4
+	maxW := termW * pixelScale
+	maxH := termH * pixelScale
+
+	if videoW <= 0 || videoH <= 0 {
+		return maxW, maxH
+	}
+
+	pixW := maxW
+	pixH := pixW * videoH / videoW
+	if pixH > maxH {
+		pixH = maxH
+		pixW = pixH * videoW / videoH
+	}
+
+	// Round down to even (ffmpeg requirement for many pixel formats)
+	pixW = pixW &^ 1
+	pixH = pixH &^ 1
+	if pixW < 2 {
+		pixW = 2
+	}
+	if pixH < 2 {
+		pixH = 2
+	}
+	return pixW, pixH
+}
+
+func NewFrameStream(path string, start time.Duration, termW, termH, fps, videoW, videoH int) (*FrameStream, error) {
+	if termW <= 0 || termH <= 0 || fps <= 0 {
 		return nil, fmt.Errorf("invalid stream configuration")
 	}
 
+	pixW, pixH := computePixelDimensions(termW, termH, videoW, videoH)
+
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Build filter chain: scale (if needed) -> fps
-	var filters []string
-	if videoWidth > 1920 {
-		filters = append(filters, "scale=1920:-1:flags=fast_bilinear")
-	}
-	filters = append(filters, fmt.Sprintf("fps=%d", fps))
+	filter := fmt.Sprintf("scale=%d:%d:flags=fast_bilinear,fps=%d", pixW, pixH, fps)
 
 	args := []string{
-		"-re",
 		"-ss", fmt.Sprintf("%.3f", start.Seconds()),
 		"-i", path,
-		"-vf", strings.Join(filters, ","),
-		"-f", "image2pipe",
-		"-vcodec", "bmp",
+		"-vf", filter,
+		"-f", "rawvideo",
+		"-pix_fmt", "rgba",
 		"-loglevel", "error",
 		"-",
 	}
@@ -60,13 +88,15 @@ func NewFrameStream(path string, start time.Duration, width, height, fps, videoW
 	}
 
 	return &FrameStream{
-		cmd:        cmd,
-		stdout:     stdout,
-		cancel:     cancel,
-		width:      width,
-		height:     height,
-		videoWidth: videoWidth,
-		targetFPS:  fps,
+		cmd:         cmd,
+		stdout:      stdout,
+		cancel:      cancel,
+		width:       termW,
+		height:      termH,
+		pixelWidth:  pixW,
+		pixelHeight: pixH,
+		videoWidth:  videoW,
+		targetFPS:   fps,
 	}, nil
 }
 
@@ -89,38 +119,33 @@ func (s *FrameStream) Close() {
 }
 
 // NeedsRestart checks if the stream configuration matches the desired parameters.
-func (s *FrameStream) NeedsRestart(width, height, fps, videoWidth int) bool {
+func (s *FrameStream) NeedsRestart(termW, termH, fps, videoW int) bool {
 	if s == nil {
 		return true
 	}
-	return s.width != width || s.height != height ||
-		s.targetFPS != fps || s.videoWidth != videoWidth
+	return s.width != termW || s.height != termH ||
+		s.targetFPS != fps || s.videoWidth != videoW
 }
 
-// NextFrame reads the next BMP frame from the stream.
+// PixelDimensions returns the pixel width and height of each frame.
+func (s *FrameStream) PixelDimensions() (int, int) {
+	return s.pixelWidth, s.pixelHeight
+}
+
+// NextFrame reads the next raw RGBA frame from the stream.
 func (s *FrameStream) NextFrame() ([]byte, error) {
 	s.mu.Lock()
 	stdout := s.stdout
+	pixW := s.pixelWidth
+	pixH := s.pixelHeight
 	s.mu.Unlock()
 	if stdout == nil {
 		return nil, io.EOF
 	}
 
-	header := make([]byte, 14)
-	if _, err := io.ReadFull(stdout, header); err != nil {
-		return nil, err
-	}
-	if header[0] != 'B' || header[1] != 'M' {
-		return nil, fmt.Errorf("invalid frame header")
-	}
-	frameSize := binary.LittleEndian.Uint32(header[2:6])
-	if frameSize < 14 {
-		return nil, fmt.Errorf("invalid frame size")
-	}
-
+	frameSize := pixW * pixH * rgbaChannels
 	frame := make([]byte, frameSize)
-	copy(frame, header)
-	if _, err := io.ReadFull(stdout, frame[14:frameSize]); err != nil {
+	if _, err := io.ReadFull(stdout, frame); err != nil {
 		return nil, err
 	}
 	return frame, nil

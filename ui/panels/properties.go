@@ -8,19 +8,16 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Properties represents the video properties panel
 type Properties struct {
 	player *video.Player
 }
 
-// NewProperties creates a new Properties panel
 func NewProperties(player *video.Player) *Properties {
 	return &Properties{
 		player: player,
 	}
 }
 
-// Render renders the properties panel
 func (p *Properties) Render(width, height int) string {
 	props := p.player.Properties()
 	if props == nil {
@@ -32,7 +29,6 @@ func (p *Properties) Render(width, height int) string {
 
 	var lines []string
 
-	// Static properties section
 	labelStyle := lipgloss.NewStyle().Width(12)
 	valueStyle := lipgloss.NewStyle()
 
@@ -48,19 +44,9 @@ func (p *Properties) Render(width, height int) string {
 	addLine("Size", props.FormattedFileSize())
 	addLine("Duration", props.FormattedDuration())
 
-	// Quality indicator with color
-	quality := p.player.Quality()
-	qualityColor := "243" // gray for LOW
-	if quality == video.QualityHigh {
-		qualityColor = "46" // green
-	}
-	qualityStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(qualityColor))
-	addLine("Quality", qualityStyle.Render(quality.String()))
-
-	// Selection section (only show if trim points are set)
 	trim := &p.player.Trim
 	if trim.InPoint != nil || trim.OutPoint != nil {
-		lines = append(lines, "") // Empty line separator
+		lines = append(lines, "")
 		lines = append(lines, "Selection")
 
 		if trim.InPoint != nil {
@@ -83,7 +69,6 @@ func (p *Properties) Render(width, height int) string {
 		Render(content)
 }
 
-// formatTime formats a duration as MM:SS
 func formatTime(d interface{ Seconds() float64 }) string {
 	total := int(d.Seconds())
 	mins := total / 60

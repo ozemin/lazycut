@@ -6,7 +6,7 @@ import (
 )
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: lazycut <video-file>")
+	fmt.Fprintln(w, "Usage: lazycut [--fps N] <video-file>")
 	fmt.Fprintln(w, "Try 'lazycut --help' for more information.")
 }
 
@@ -20,6 +20,7 @@ Arguments:
   <video-file>    Path to the input video file
 
 Flags:
+  --fps N         Preview frame rate, default 24 (lower = faster rendering)
   -h, --help      Show this help message
   -v, --version   Show version information
 
@@ -40,7 +41,6 @@ Keyboard Shortcuts:
   Enter           Export selection
   u               Undo last trim change
   m               Toggle mute
-  Tab             Cycle preview quality
   ?               Show keyboard shortcuts
   q               Quit`)
 }

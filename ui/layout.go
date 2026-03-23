@@ -1,48 +1,33 @@
 package ui
 
-// Layout constants
 const (
-	minPanelWidth  = 10
-	minPanelHeight = 5
-	// Border (2) + padding (2 left + 2 right) = 6 horizontal overhead per panel
-	horizontalOverhead = 6
-    // Border (2) = 2 vertical overhead per panel (no title line)
-    verticalOverhead = 2
-    // Timeline fixed height (includes border)
-    // Content: time line + marker line + progress bar + cursor line + help = 5 lines
-    // Plus vertical overhead (2) = 7
-    timelineFixedHeight = 7
-	// Properties panel fixed width
+	minPanelWidth        = 10
+	minPanelHeight       = 5
+	horizontalOverhead   = 6
+	verticalOverhead     = 2
+	timelineFixedHeight  = 7
 	propertiesFixedWidth = 30
 )
 
-// PanelDimensions holds the calculated dimensions for all panels
-// Layout: Preview + Properties (top row, horizontal split) + Timeline (bottom, fixed height)
 type PanelDimensions struct {
-	// Total panel dimensions (for lipgloss Width/Height)
-	PreviewWidth     int
-	PreviewHeight    int
-	PropertiesWidth  int
-	PropertiesHeight int
-	TimelineWidth    int
-	TimelineHeight   int
-	// Content dimensions (what gets passed to panel Render)
-	PreviewContentWidth    int
-	PreviewContentHeight   int
+	PreviewWidth            int
+	PreviewHeight           int
+	PropertiesWidth         int
+	PropertiesHeight        int
+	TimelineWidth           int
+	TimelineHeight          int
+	PreviewContentWidth     int
+	PreviewContentHeight    int
 	PropertiesContentWidth  int
 	PropertiesContentHeight int
-	TimelineContentWidth   int
-	TimelineContentHeight  int
+	TimelineContentWidth    int
+	TimelineContentHeight   int
 }
 
-// CalculatePanelDimensions calculates panel dimensions based on terminal size
-// Layout: Preview + Properties (top row), Timeline (bottom, fixed height)
 func CalculatePanelDimensions(termWidth, termHeight int) PanelDimensions {
-	// Timeline has fixed height, top row takes the rest
 	timelineHeight := timelineFixedHeight
 	topRowHeight := termHeight - timelineHeight
 
-	// Properties has fixed width, preview takes the rest
 	propertiesWidth := propertiesFixedWidth
 	previewWidth := termWidth - propertiesWidth
 
