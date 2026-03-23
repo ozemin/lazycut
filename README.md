@@ -1,5 +1,11 @@
 # lazycut
 
+[![Go Version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev)
+[![FFmpeg](https://img.shields.io/badge/requires-ffmpeg-007808?logo=ffmpeg)](https://ffmpeg.org)
+[![Chafa](https://img.shields.io/badge/requires-chafa-4B0082)](https://hpjansson.org/chafa/)
+[![License](https://img.shields.io/github/license/emin-ozata/lazycut)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/emin-ozata/lazycut)](https://github.com/emin-ozata/lazycut/releases)
+
 Terminal-based video trimming tool. Mark in/out points and export trimmed clips with aspect ratio control.
 
 ![lazycut demo](media/demo.gif)
