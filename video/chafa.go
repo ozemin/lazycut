@@ -1,64 +1,70 @@
 package video
 
+/*
+#cgo pkg-config: chafa
+#include <chafa.h>
+#include <stdlib.h>
+*/
+import "C"
 import (
 	"fmt"
 	"os"
-
-	chafa "github.com/ploMP4/chafa-go"
+	"unsafe"
 )
 
 const symbolSelector = "block+border+space"
 
 type ChafaConfig struct {
 	WorkFactor float32
-	CanvasMode chafa.CanvasMode
-	ColorSpace chafa.ColorSpace
-	DitherMode chafa.DitherMode
+	CanvasMode C.ChafaCanvasMode
+	ColorSpace C.ChafaColorSpace
+	DitherMode C.ChafaDitherMode
 }
 
 var defaultChafaConfig = ChafaConfig{
 	WorkFactor: 0.5,
-	CanvasMode: chafa.CHAFA_CANVAS_MODE_TRUECOLOR,
-	ColorSpace: chafa.CHAFA_COLOR_SPACE_DIN99D,
-	DitherMode: chafa.CHAFA_DITHER_MODE_DIFFUSION,
+	CanvasMode: C.CHAFA_CANVAS_MODE_TRUECOLOR,
+	ColorSpace: C.CHAFA_COLOR_SPACE_DIN99D,
+	DitherMode: C.CHAFA_DITHER_MODE_DIFFUSION,
 }
 
-// Render converts raw RGBA pixels into terminal ASCII art.
-// pixW/pixH are the source pixel dimensions; termW/termH are the target character dimensions.
 func (c ChafaConfig) Render(pixels []byte, pixW, pixH, termW, termH int) (string, error) {
 	if len(pixels) != pixW*pixH*rgbaChannels {
 		return "", fmt.Errorf("pixel buffer size mismatch: got %d, want %d", len(pixels), pixW*pixH*rgbaChannels)
 	}
 
-	symbolMap := chafa.SymbolMapNew()
-	defer chafa.SymbolMapUnref(symbolMap)
-	chafa.SymbolMapApplySelectors(symbolMap, symbolSelector)
+	sm := C.chafa_symbol_map_new()
+	defer C.chafa_symbol_map_unref(sm)
+	selectors := C.CString(symbolSelector)
+	defer C.free(unsafe.Pointer(selectors))
+	C.chafa_symbol_map_apply_selectors(sm, selectors, nil)
 
 	canvasMode := c.CanvasMode
 	if _, ok := os.LookupEnv("NO_COLOR"); ok {
-		canvasMode = chafa.CHAFA_CANVAS_MODE_FGBG_BGFG
+		canvasMode = C.CHAFA_CANVAS_MODE_FGBG_BGFG
 	}
 
-	cfg := chafa.CanvasConfigNew()
-	defer chafa.CanvasConfigUnref(cfg)
-	chafa.CanvasConfigSetGeometry(cfg, int32(termW), int32(termH))
-	chafa.CanvasConfigSetSymbolMap(cfg, symbolMap)
-	chafa.CanvasConfigSetPixelMode(cfg, chafa.CHAFA_PIXEL_MODE_SYMBOLS)
-	chafa.CanvasConfigSetCanvasMode(cfg, canvasMode)
-	chafa.CanvasConfigSetColorSpace(cfg, c.ColorSpace)
-	chafa.CanvasConfigSetDitherMode(cfg, c.DitherMode)
-	chafa.CanvasConfigSetWorkFactor(cfg, c.WorkFactor)
+	cfg := C.chafa_canvas_config_new()
+	defer C.chafa_canvas_config_unref(cfg)
+	C.chafa_canvas_config_set_geometry(cfg, C.gint(termW), C.gint(termH))
+	C.chafa_canvas_config_set_symbol_map(cfg, sm)
+	C.chafa_canvas_config_set_pixel_mode(cfg, C.CHAFA_PIXEL_MODE_SYMBOLS)
+	C.chafa_canvas_config_set_canvas_mode(cfg, canvasMode)
+	C.chafa_canvas_config_set_color_space(cfg, c.ColorSpace)
+	C.chafa_canvas_config_set_dither_mode(cfg, c.DitherMode)
+	C.chafa_canvas_config_set_work_factor(cfg, C.gfloat(c.WorkFactor))
 
-	canvas := chafa.CanvasNew(cfg)
-	defer chafa.CanvasUnRef(canvas)
+	cv := C.chafa_canvas_new(cfg)
+	defer C.chafa_canvas_unref(cv)
 
-	chafa.CanvasDrawAllPixels(
-		canvas,
-		chafa.CHAFA_PIXEL_RGBA8_UNASSOCIATED,
-		pixels,
-		int32(pixW), int32(pixH), int32(pixW*rgbaChannels),
+	C.chafa_canvas_draw_all_pixels(
+		cv,
+		C.CHAFA_PIXEL_RGBA8_UNASSOCIATED,
+		(*C.guint8)(unsafe.Pointer(&pixels[0])),
+		C.gint(pixW), C.gint(pixH), C.gint(pixW*rgbaChannels),
 	)
 
-	gs := chafa.CanvasPrint(canvas, nil)
-	return gs.String(), nil
+	gs := C.chafa_canvas_print(cv, nil)
+	defer C.g_string_free(gs, C.TRUE)
+	return C.GoString(gs.str), nil
 }
