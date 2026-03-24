@@ -43,6 +43,9 @@ type Model struct {
 	showHelpModal bool
 	undoStack     []trimSnapshot
 
+	aspectMode int // 0: maintain aspect ratio (default), 1: stretch
+	fullscreen bool
+
 	repeatCount int
 
 	previewQueue    []video.Section
@@ -68,6 +71,47 @@ func (m *Model) allSections() []video.Section {
 	sections := make([]video.Section, len(m.player.Sections))
 	copy(sections, m.player.Sections)
 	return sections
+}
+
+func (m *Model) updatePlayerSize() {
+	var dims PanelDimensions
+	if m.fullscreen {
+		dims = CalculateFullscreenDimensions(m.width, m.height)
+	} else {
+		dims = CalculatePanelDimensions(m.width, m.height)
+	}
+	w, h := dims.PreviewContentWidth, dims.PreviewContentHeight
+	if m.aspectMode == 0 {
+		props := m.player.Properties()
+		w, h = computeAspectFitDimensions(w, h, props.Width, props.Height)
+	}
+	m.player.SetSize(w, h)
+}
+
+func computeAspectFitDimensions(termW, termH, videoW, videoH int) (int, int) {
+	if videoW <= 0 || videoH <= 0 {
+		return termW, termH
+	}
+	// Terminal cells are ~2x taller than wide
+	cellRatio := 2.0
+	videoAspect := float64(videoW) / float64(videoH) * cellRatio
+
+	charW := termW
+	charH := int(float64(charW) / videoAspect)
+
+	if charH > termH {
+		charH = termH
+		charW = int(float64(charH) * videoAspect)
+	}
+
+	if charW < 1 {
+		charW = 1
+	}
+	if charH < 1 {
+		charH = 1
+	}
+
+	return charW, charH
 }
 
 func (m *Model) saveTrimState() {
@@ -118,8 +162,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
-		dims := CalculatePanelDimensions(m.width, m.height)
-		m.player.SetSize(dims.PreviewContentWidth, dims.PreviewContentHeight)
+		m.updatePlayerSize()
 		return m, nil
 
 	case TickMsg:
@@ -207,6 +250,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				n = 1
 			}
 			m.player.Seek(pos + time.Duration(n*5)*time.Second)
+			m.repeatCount = 0
+			return m, nil
+
+		case "j":
+			n := m.repeatCount
+			if n <= 0 {
+				n = 1
+			}
+			m.player.Seek(pos - time.Duration(n)*time.Minute)
+			m.repeatCount = 0
+			return m, nil
+
+		case "k":
+			n := m.repeatCount
+			if n <= 0 {
+				n = 1
+			}
+			m.player.Seek(pos + time.Duration(n)*time.Minute)
+			m.repeatCount = 0
+			return m, nil
+
+		case "J":
+			n := m.repeatCount
+			if n <= 0 {
+				n = 1
+			}
+			m.player.Seek(pos - time.Duration(n*5)*time.Minute)
+			m.repeatCount = 0
+			return m, nil
+
+		case "K":
+			n := m.repeatCount
+			if n <= 0 {
+				n = 1
+			}
+			m.player.Seek(pos + time.Duration(n*5)*time.Minute)
 			m.repeatCount = 0
 			return m, nil
 
@@ -313,6 +392,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "m":
 			m.player.ToggleMute()
 			return m, nil
+
+		case "a":
+			m.aspectMode = (m.aspectMode + 1) % 2
+			m.updatePlayerSize()
+			return m, nil
+
+		case "f":
+			m.fullscreen = !m.fullscreen
+			m.updatePlayerSize()
+			return m, nil
 		}
 	}
 
@@ -339,6 +428,26 @@ func (m Model) View() string {
 		return "Initializing..."
 	}
 
+	if m.showHelpModal {
+		return m.renderHelpModal()
+	}
+	if m.showExportModal {
+		return m.renderExportModal()
+	}
+
+	if m.fullscreen {
+		dims := CalculateFullscreenDimensions(m.width, m.height)
+		if dims.PreviewContentWidth < minPanelWidth || dims.PreviewContentHeight < minPanelHeight {
+			return lipgloss.NewStyle().
+				Width(m.width).
+				Height(m.height).
+				Align(lipgloss.Center, lipgloss.Center).
+				Render("Terminal too small")
+		}
+		previewContent := m.preview.Render(dims.PreviewContentWidth, dims.PreviewContentHeight)
+		return renderPanel(previewContent, dims.PreviewWidth, dims.PreviewHeight)
+	}
+
 	dims := CalculatePanelDimensions(m.width, m.height)
 
 	if dims.PreviewContentWidth < minPanelWidth || dims.PreviewContentHeight < minPanelHeight {
@@ -361,16 +470,7 @@ func (m Model) View() string {
 	timelineContent := m.timeline.Render(dims.TimelineContentWidth, dims.TimelineContentHeight)
 	timelinePanel := renderPanel(timelineContent, dims.TimelineWidth, dims.TimelineHeight)
 
-	base := lipgloss.JoinVertical(lipgloss.Left, topRow, timelinePanel)
-
-	if m.showHelpModal {
-		return m.renderHelpModal()
-	}
-	if m.showExportModal {
-		return m.renderExportModal()
-	}
-
-	return base
+	return lipgloss.JoinVertical(lipgloss.Left, topRow, timelinePanel)
 }
 
 func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -462,17 +562,21 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
+		if m.exportFocusField == 0 {
+			if len(msg.Runes) > 0 {
+				m.exportFilename += string(msg.Runes)
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "j":
 			if m.exportFocusField < maxField {
 				m.exportFocusField++
 			}
-			return m, nil
 		case "k":
 			if m.exportFocusField > 0 {
 				m.exportFocusField--
 			}
-			return m, nil
 		case "h":
 			if m.exportFocusField == 1 {
 				m.exportAspectRatio--
@@ -482,17 +586,12 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else if m.exportFocusField == 2 {
 				m.exportMode = (m.exportMode + 1) % 2
 			}
-			return m, nil
 		case "l":
 			if m.exportFocusField == 1 {
 				m.exportAspectRatio = (m.exportAspectRatio + 1) % len(video.AspectRatioOptions)
 			} else if m.exportFocusField == 2 {
 				m.exportMode = (m.exportMode + 1) % 2
 			}
-			return m, nil
-		}
-		if m.exportFocusField == 0 && len(msg.Runes) > 0 {
-			m.exportFilename += string(msg.Runes)
 		}
 		return m, nil
 	}
@@ -529,11 +628,15 @@ func (m Model) renderHelpModal() string {
 		kd("Space", "Play/Pause") + "\n" +
 		kd("h / l", "Seek ±1 second") + "\n" +
 		kd("H / L", "Seek ±5 seconds") + "\n" +
+		kd("j / k", "Seek ±1 minute") + "\n" +
+		kd("J / K", "Seek ±5 minutes") + "\n" +
 		kd(", / .", "Seek ±1 frame") + "\n" +
 		kd("0", "Go to start") + "\n" +
 		kd("G / $", "Go to end") + "\n" +
 		kd("5l 10.", "Vim-style counts") + "\n" +
-		kd("m", "Toggle mute")
+		kd("m", "Toggle mute") + "\n" +
+		kd("a", "Cycle aspect mode") + "\n" +
+		kd("f", "Toggle fullscreen")
 
 	trim := sectionStyle.Render("TRIM") + "\n" +
 		kd("i", "Set in-point") + "\n" +

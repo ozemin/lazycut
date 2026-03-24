@@ -24,6 +24,15 @@ type PanelDimensions struct {
 	TimelineContentHeight   int
 }
 
+func CalculateFullscreenDimensions(termWidth, termHeight int) PanelDimensions {
+	return PanelDimensions{
+		PreviewWidth:         termWidth,
+		PreviewHeight:        termHeight,
+		PreviewContentWidth:  max(0, termWidth-horizontalOverhead),
+		PreviewContentHeight: max(0, termHeight-verticalOverhead),
+	}
+}
+
 func CalculatePanelDimensions(termWidth, termHeight int) PanelDimensions {
 	timelineHeight := timelineFixedHeight
 	topRowHeight := termHeight - timelineHeight
