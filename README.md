@@ -19,16 +19,6 @@ brew tap emin-ozata/homebrew-tap
 brew install lazycut
 ```
 
-### Windows
-
-Download the latest Windows binary from the [releases page](https://github.com/emin-ozata/lazycut/releases):
-- `lazycut_X.X.X_windows_amd64.zip`
-
-Extract and add to your PATH, or run directly.
-
-**Dependencies:**
-- ffmpeg: `winget install ffmpeg` or download from [ffmpeg.org](https://ffmpeg.org)
-
 ### Build from source
 
 Or build from source:
