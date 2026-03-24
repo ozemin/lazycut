@@ -30,12 +30,24 @@ Extract and add to your PATH, or run directly.
 - ffmpeg: `winget install ffmpeg` or download from [ffmpeg.org](https://ffmpeg.org)
 
 ### Build from source
+Prerequisites: Latest version of Golang + ffmpeg + chafa dev packages.
+<details>
+<summary>Fedora</summary>
 
-Or build from source:
+Install latest version of Golang via COPR as recommended [by Fedora docs](https://developer.fedoraproject.org/tech/languages/go/go-installation.html)
+```sh
+sudo dnf copr enable @go-sig/golang-rawhide
+sudo dnf install golang
+```
+
+Install ffmpeg and chafa
+```sh
+sudo dnf install -y ffmpeg chafa chafa-devel
+```
+</details>
+
 ```bash
-git clone https://github.com/emin-ozata/lazycut.git
-cd lazycut
-go build
+go install github.com/emin-ozata/lazycut@latest
 ./lazycut video.mp4
 ```
 
