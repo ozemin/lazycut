@@ -10,8 +10,9 @@ import (
 )
 
 type Timeline struct {
-	player       *video.Player
-	exportStatus string
+	player        *video.Player
+	exportStatus  string
+	repeatDisplay string
 }
 
 func NewTimeline(player *video.Player) *Timeline {
@@ -22,6 +23,10 @@ func NewTimeline(player *video.Player) *Timeline {
 
 func (t *Timeline) SetExportStatus(status string) {
 	t.exportStatus = status
+}
+
+func (t *Timeline) SetRepeatDisplay(s string) {
+	t.repeatDisplay = s
 }
 
 func (t *Timeline) Render(width, height int) string {
@@ -40,12 +45,10 @@ func (t *Timeline) Render(width, height int) string {
 		muteIcon = "×)"
 	}
 
-	barWidth := width - 3
-	if barWidth < 10 {
-		barWidth = 10
-	}
+	barWidth := max(width-3, 10)
 
-	line1 := fmt.Sprintf(" %s %s / %s  %s", playIcon, formatDuration(pos), formatDuration(dur), muteIcon)
+	fps := t.player.FPS()
+	line1 := fmt.Sprintf(" %s %s / %s  %s", playIcon, formatDuration(pos, fps), formatDuration(dur, fps), muteIcon)
 	line2 := " " + t.markerLine(barWidth, dur, trim)
 	line3 := " " + t.progressBar(barWidth, pos, dur, trim)
 	line4 := " " + t.cursorLine(barWidth, pos, dur)
@@ -64,37 +67,22 @@ func (t *Timeline) progressBar(barWidth int, pos, dur time.Duration, trim *video
 		return "[" + repeat("-", barWidth) + "]"
 	}
 
-	cursor := int(float64(pos) / float64(dur) * float64(barWidth))
-	if cursor > barWidth {
-		cursor = barWidth
-	}
+	cursor := min(int(float64(pos)/float64(dur)*float64(barWidth)), barWidth)
 
 	var in, out int = -1, -1
 	if trim.InPoint != nil {
-		in = int(float64(*trim.InPoint) / float64(dur) * float64(barWidth))
-		if in > barWidth {
-			in = barWidth
-		}
+		in = min(int(float64(*trim.InPoint)/float64(dur)*float64(barWidth)), barWidth)
 	}
 	if trim.OutPoint != nil {
-		out = int(float64(*trim.OutPoint) / float64(dur) * float64(barWidth))
-		if out > barWidth {
-			out = barWidth
-		}
+		out = min(int(float64(*trim.OutPoint)/float64(dur)*float64(barWidth)), barWidth)
 	}
 
 	// Build index ranges for committed sections
 	type sectionRange struct{ in, out int }
 	var committedRanges []sectionRange
 	for _, sec := range t.player.Sections {
-		si := int(float64(sec.In) / float64(dur) * float64(barWidth))
-		so := int(float64(sec.Out) / float64(dur) * float64(barWidth))
-		if si > barWidth {
-			si = barWidth
-		}
-		if so > barWidth {
-			so = barWidth
-		}
+		si := min(int(float64(sec.In)/float64(dur)*float64(barWidth)), barWidth)
+		so := min(int(float64(sec.Out)/float64(dur)*float64(barWidth)), barWidth)
 		committedRanges = append(committedRanges, sectionRange{si, so})
 	}
 
@@ -138,31 +126,19 @@ func (t *Timeline) markerLine(barWidth int, dur time.Duration, trim *video.TrimS
 
 	// Draw committed section markers (active trim markers take priority)
 	for _, sec := range t.player.Sections {
-		si := int(float64(sec.In)/float64(dur)*float64(barWidth)) + 1
-		so := int(float64(sec.Out)/float64(dur)*float64(barWidth)) + 1
-		if si >= len(line) {
-			si = len(line) - 1
-		}
-		if so >= len(line) {
-			so = len(line) - 1
-		}
+		si := min(int(float64(sec.In)/float64(dur)*float64(barWidth))+1, len(line)-1)
+		so := min(int(float64(sec.Out)/float64(dur)*float64(barWidth))+1, len(line)-1)
 		line[si] = inStyle.Render("▼")
 		line[so] = outStyle.Render("▼")
 	}
 
 	if trim.InPoint != nil {
-		in := int(float64(*trim.InPoint)/float64(dur)*float64(barWidth)) + 1
-		if in >= len(line) {
-			in = len(line) - 1
-		}
+		in := min(int(float64(*trim.InPoint)/float64(dur)*float64(barWidth))+1, len(line)-1)
 		line[in] = inStyle.Render("▼")
 	}
 
 	if trim.OutPoint != nil {
-		out := int(float64(*trim.OutPoint)/float64(dur)*float64(barWidth)) + 1
-		if out >= len(line) {
-			out = len(line) - 1
-		}
+		out := min(int(float64(*trim.OutPoint)/float64(dur)*float64(barWidth))+1, len(line)-1)
 		line[out] = outStyle.Render("▼")
 	}
 
@@ -179,20 +155,21 @@ func (t *Timeline) cursorLine(barWidth int, pos, dur time.Duration) string {
 		line[i] = ' '
 	}
 
-	cursor := int(float64(pos)/float64(dur)*float64(barWidth)) + 1
-	if cursor >= len(line) {
-		cursor = len(line) - 1
-	}
+	cursor := min(int(float64(pos)/float64(dur)*float64(barWidth))+1, len(line)-1)
 	line[cursor] = '▲'
 
 	return string(line)
 }
 
-func formatDuration(d time.Duration) string {
+func formatDuration(d time.Duration, fps int) string {
 	total := int(d.Seconds())
 	mins := total / 60
 	secs := total % 60
-	return fmt.Sprintf("%02d:%02d", mins, secs)
+	frame := 0
+	if fps > 0 {
+		frame = int(d.Seconds()*float64(fps)) % fps
+	}
+	return fmt.Sprintf("%02d:%02d.%02d", mins, secs, frame)
 }
 
 func repeat(s string, n int) string {
@@ -259,6 +236,10 @@ func (t *Timeline) footerHelp(width int) string {
 			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + "  " + kd(",/.", "±frame", false) + sep +
 			kd("m", "mute", false) + sep +
 			kd("?", "help", false)
+	}
+
+	if t.repeatDisplay != "" {
+		result += dimStyle.Render("  ·  ") + accentStyle.Render(t.repeatDisplay)
 	}
 
 	return result

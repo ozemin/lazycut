@@ -217,12 +217,8 @@ func (p *Player) Position() time.Duration {
 
 func (p *Player) Seek(position time.Duration) {
 	p.mu.Lock()
-	if position < 0 {
-		position = 0
-	}
-	if position > p.duration {
-		position = p.duration
-	}
+	position = max(position, 0)
+	position = min(position, p.duration)
 	p.position = position
 	if p.playing {
 		p.seekVersion++

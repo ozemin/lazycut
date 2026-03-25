@@ -149,24 +149,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showExportModal {
 			return m.handleExportModalKey(msg)
 		}
-		m.exportStatus = ""
-
 		pos := m.player.Position()
 		fps := m.player.FPS()
 		frameDuration := time.Second / time.Duration(fps)
 
-		switch msg.String() {
+		key := msg.String()
+		isDigit := len(key) == 1 && key[0] >= '1' && key[0] <= '9'
+		isZero := key == "0" && m.repeatCount > 0
+		pendingRepeat := m.repeatCount
+		if !isDigit && !isZero {
+			m.exportStatus = ""
+			m.repeatCount = 0
+		}
+
+		switch key {
 		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-			m.repeatCount = m.repeatCount*10 + int(msg.Runes[0]-'0')
-			m.exportStatus = fmt.Sprintf("%dx", m.repeatCount)
+			m.repeatCount = pendingRepeat*10 + int(msg.Runes[0]-'0')
 			return m, nil
 		case "0":
-			if m.repeatCount == 0 {
+			if pendingRepeat == 0 {
 				m.player.Seek(0)
 				return m, nil
 			}
-			m.repeatCount *= 10
-			m.exportStatus = fmt.Sprintf("%dx", m.repeatCount)
+			m.repeatCount = pendingRepeat * 10
 			return m, nil
 		case "ctrl+c", "q":
 			m.player.Close()
@@ -177,62 +182,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "h":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos - time.Duration(n)*time.Second)
-			m.repeatCount = 0
 			return m, nil
 
 		case "l":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos + time.Duration(n)*time.Second)
-			m.repeatCount = 0
 			return m, nil
 
 		case "H":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos - time.Duration(n*5)*time.Second)
-			m.repeatCount = 0
 			return m, nil
 
 		case "L":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos + time.Duration(n*5)*time.Second)
-			m.repeatCount = 0
 			return m, nil
 
 		case ",":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos - time.Duration(n)*frameDuration)
-			m.repeatCount = 0
 			return m, nil
 
 		case ".":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos + time.Duration(n)*frameDuration)
-			m.repeatCount = 0
 			return m, nil
 
 		case "$", "G":
 			m.player.Seek(m.player.Duration())
-			m.repeatCount = 0
 			return m, nil
 
 		case "i":
@@ -360,6 +358,11 @@ func (m Model) View() string {
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, previewPanel, propertiesPanel)
 
 	m.timeline.SetExportStatus(m.exportStatus)
+	repeatDisplay := ""
+	if m.repeatCount > 0 {
+		repeatDisplay = fmt.Sprintf("%dx", m.repeatCount)
+	}
+	m.timeline.SetRepeatDisplay(repeatDisplay)
 	timelineContent := m.timeline.Render(dims.TimelineContentWidth, dims.TimelineContentHeight)
 	timelinePanel := renderPanel(timelineContent, dims.TimelineWidth, dims.TimelineHeight)
 
@@ -673,12 +676,13 @@ func (m Model) renderExportModal() string {
 
 		var sectionList string
 		if isMulti {
+			fps := m.player.FPS()
 			for i, sec := range sections {
 				sectionList += dimStyle.Render(fmt.Sprintf("  #%d  %s → %s  (%s)",
 					i+1,
-					formatDuration(sec.In),
-					formatDuration(sec.Out),
-					formatDuration(sec.Duration()),
+					formatDuration(sec.In, fps),
+					formatDuration(sec.Out, fps),
+					formatDuration(sec.Duration(), fps),
 				)) + "\n"
 			}
 			sectionList += "\n"
@@ -752,9 +756,13 @@ func (m Model) renderExportModal() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }
 
-func formatDuration(d time.Duration) string {
+func formatDuration(d time.Duration, fps int) string {
 	total := int(d.Seconds())
 	mins := total / 60
 	secs := total % 60
-	return fmt.Sprintf("%02d:%02d", mins, secs)
+	frame := 0
+	if fps > 0 {
+		frame = int(d.Seconds()*float64(fps)) % fps
+	}
+	return fmt.Sprintf("%02d:%02d.%02d", mins, secs, frame)
 }
