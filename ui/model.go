@@ -13,6 +13,17 @@ import (
 
 const tickFPS = 30
 
+var logo = []string{
+	` ██╗      █████╗ ███████╗██╗   ██╗ ██████╗██╗   ██╗████████╗`,
+	` ██║     ██╔══██╗╚══███╔╝╚██╗ ██╔╝██╔════╝██║   ██║╚══██╔══╝`,
+	` ██║     ███████║  ███╔╝  ╚████╔╝ ██║     ██║   ██║   ██║   `,
+	` ██║     ██╔══██║ ███╔╝    ╚██╔╝  ██║     ██║   ██║   ██║   `,
+	` ███████╗██║  ██║███████╗   ██║   ╚██████╗╚██████╔╝   ██║   `,
+	` ╚══════╝╚═╝  ╚═╝╚══════╝   ╚═╝    ╚═════╝ ╚═════╝    ╚═╝   `,
+}
+
+type splashDoneMsg struct{}
+
 type TickMsg time.Time
 
 type ExportDoneMsg struct {
@@ -23,14 +34,14 @@ type ExportDoneMsg struct {
 type ExportProgressMsg float64
 
 type Model struct {
-	width        int
-	height       int
-	player       *video.Player
-	preview      *panels.Preview
-	properties   *panels.Properties
-	timeline     *panels.Timeline
-	ready        bool
-	previewMode  bool
+	width      int
+	height     int
+	splashDone bool
+	player      *video.Player
+	preview     *panels.Preview
+	properties  *panels.Properties
+	timeline    *panels.Timeline
+	previewMode bool
 	exportStatus string
 
 	showExportModal    bool
@@ -62,7 +73,6 @@ func NewModel(player *video.Player) Model {
 		preview:    panels.NewPreview(player),
 		properties: panels.NewProperties(player),
 		timeline:   panels.NewTimeline(player),
-		ready:      false,
 	}
 }
 
@@ -116,12 +126,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case splashDoneMsg:
+		m.splashDone = true
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.ready = true
 		dims := CalculatePanelDimensions(m.width, m.height)
 		m.player.SetSize(dims.PreviewContentWidth, dims.PreviewContentHeight)
+		if !m.splashDone {
+			return m, tea.Tick(800*time.Millisecond, func(t time.Time) tea.Msg {
+				return splashDoneMsg{}
+			})
+		}
 		return m, nil
 
 	case TickMsg:
@@ -334,9 +352,21 @@ func renderPanel(content string, width, height int) string {
 		Render(paddedContent)
 }
 
+func (m Model) renderSplash() string {
+	logoStr := lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true).Render(strings.Join(logo, "\n"))
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		Align(lipgloss.Center, lipgloss.Center).
+		Render(logoStr)
+}
+
 func (m Model) View() string {
-	if !m.ready {
-		return "Initializing..."
+	if m.width == 0 {
+		return ""
+	}
+	if !m.splashDone {
+		return m.renderSplash()
 	}
 
 	dims := CalculatePanelDimensions(m.width, m.height)
