@@ -15,8 +15,7 @@ Terminal-based video trimming tool. Mark in/out points and export trimmed clips 
 ### macOS
 
 ```bash
-brew tap emin-ozata/homebrew-tap
-brew install lazycut
+brew install emin-ozata/tap/lazycut
 ```
 
 ### Build from source
