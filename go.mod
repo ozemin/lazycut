@@ -1,4 +1,4 @@
-module github.com/emin-ozata/lazycut
+module github.com/ozemin/lazycut
 
 go 1.26
 

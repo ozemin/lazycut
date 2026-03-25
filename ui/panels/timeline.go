@@ -2,9 +2,10 @@ package panels
 
 import (
 	"fmt"
-	"github.com/emin-ozata/lazycut/video"
 	"strings"
 	"time"
+
+	"github.com/ozemin/lazycut/video"
 
 	"github.com/charmbracelet/lipgloss"
 )

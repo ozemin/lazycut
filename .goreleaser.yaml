@@ -30,14 +30,14 @@ release:
 brews:
   - name: lazycut
     repository:
-      owner: emin-ozata
+      owner: ozemin
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
-    homepage: https://github.com/emin-ozata/lazycut
+    homepage: https://github.com/ozemin/lazycut
     description: Terminal-based video trimming TUI (ffmpeg + chafa)
     dependencies:
       - name: ffmpeg

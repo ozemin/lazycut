@@ -3,8 +3,8 @@
 [![Go Version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev)
 [![FFmpeg](https://img.shields.io/badge/requires-ffmpeg-007808?logo=ffmpeg)](https://ffmpeg.org)
 [![Chafa](https://img.shields.io/badge/requires-chafa-4B0082)](https://hpjansson.org/chafa/)
-[![License](https://img.shields.io/github/license/emin-ozata/lazycut)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/emin-ozata/lazycut)](https://github.com/emin-ozata/lazycut/releases)
+[![License](https://img.shields.io/github/license/ozemin/lazycut)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/ozemin/lazycut)](https://github.com/ozemin/lazycut/releases)
 
 Terminal-based video trimming tool. Mark in/out points and export trimmed clips with aspect ratio control.
 
@@ -15,14 +15,14 @@ Terminal-based video trimming tool. Mark in/out points and export trimmed clips 
 ### macOS
 
 ```bash
-brew install emin-ozata/tap/lazycut
+brew install ozemin/tap/lazycut
 ```
 
 ### Build from source
 
 Or build from source:
 ```bash
-git clone https://github.com/emin-ozata/lazycut.git
+git clone https://github.com/ozemin/lazycut.git
 cd lazycut
 go build
 ./lazycut video.mp4

@@ -2,10 +2,11 @@ package ui
 
 import (
 	"fmt"
-	"github.com/emin-ozata/lazycut/ui/panels"
-	"github.com/emin-ozata/lazycut/video"
 	"strings"
 	"time"
+
+	"github.com/ozemin/lazycut/ui/panels"
+	"github.com/ozemin/lazycut/video"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -34,14 +35,14 @@ type ExportDoneMsg struct {
 type ExportProgressMsg float64
 
 type Model struct {
-	width      int
-	height     int
-	splashDone bool
-	player      *video.Player
-	preview     *panels.Preview
-	properties  *panels.Properties
-	timeline    *panels.Timeline
-	previewMode bool
+	width        int
+	height       int
+	splashDone   bool
+	player       *video.Player
+	preview      *panels.Preview
+	properties   *panels.Properties
+	timeline     *panels.Timeline
+	previewMode  bool
 	exportStatus string
 
 	showExportModal    bool
