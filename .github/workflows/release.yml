@@ -7,11 +7,10 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,13 +20,20 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version-file: go.mod
+
+      - name: Install build dependencies
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+        run: |
+          brew install chafa pkgconf
+          echo "PKG_CONFIG_PATH=$(brew --prefix chafa)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig" >> "$GITHUB_ENV"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: latest
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

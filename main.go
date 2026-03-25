@@ -3,9 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/emin-ozata/lazycut/ui"
-	"github.com/emin-ozata/lazycut/video"
 	"os"
+
+	"github.com/ozemin/lazycut/ui"
+	"github.com/ozemin/lazycut/video"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

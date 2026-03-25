@@ -46,12 +46,8 @@ func computePixelDimensions(termW, termH, videoW, videoH int) (int, int) {
 	// Round down to even (ffmpeg requirement for many pixel formats)
 	pixW = pixW &^ 1
 	pixH = pixH &^ 1
-	if pixW < 2 {
-		pixW = 2
-	}
-	if pixH < 2 {
-		pixH = 2
-	}
+	pixW = max(pixW, 2)
+	pixH = max(pixH, 2)
 	return pixW, pixH
 }
 

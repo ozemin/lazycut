@@ -2,8 +2,9 @@ package panels
 
 import (
 	"fmt"
-	"github.com/emin-ozata/lazycut/video"
 	"strings"
+
+	"github.com/ozemin/lazycut/video"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -29,8 +30,9 @@ func (p *Properties) Render(width, height int) string {
 
 	var lines []string
 
-	labelStyle := lipgloss.NewStyle().Width(12)
-	valueStyle := lipgloss.NewStyle()
+	labelStyle := lipgloss.NewStyle().Width(12).Foreground(lipgloss.Color("245"))
+	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252"))
 
 	addLine := func(label, value string) {
 		line := labelStyle.Render(label) + valueStyle.Render(value)
@@ -44,10 +46,18 @@ func (p *Properties) Render(width, height int) string {
 	addLine("Size", props.FormattedFileSize())
 	addLine("Duration", props.FormattedDuration())
 
+	for i, sec := range p.player.Sections {
+		lines = append(lines, "")
+		lines = append(lines, headerStyle.Render(fmt.Sprintf("Section %d", i+1)))
+		addLine("In", formatTime(sec.In))
+		addLine("Out", formatTime(sec.Out))
+		addLine("Length", formatTime(sec.Duration()))
+	}
+
 	trim := &p.player.Trim
 	if trim.InPoint != nil || trim.OutPoint != nil {
 		lines = append(lines, "")
-		lines = append(lines, "Selection")
+		lines = append(lines, headerStyle.Render("Selection"))
 
 		if trim.InPoint != nil {
 			addLine("In", formatTime(*trim.InPoint))
@@ -70,8 +80,10 @@ func (p *Properties) Render(width, height int) string {
 }
 
 func formatTime(d interface{ Seconds() float64 }) string {
-	total := int(d.Seconds())
+	s := d.Seconds()
+	total := int(s)
 	mins := total / 60
 	secs := total % 60
-	return fmt.Sprintf("%02d:%02d", mins, secs)
+	tenths := int(s*10) % 10
+	return fmt.Sprintf("%02d:%02d.%d", mins, secs, tenths)
 }

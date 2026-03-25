@@ -7,12 +7,10 @@ builds:
     main: .
     binary: lazycut
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     goos:
       - darwin
-      - windows
     goarch:
-      - amd64
       - arm64
     ldflags:
       - -s -w -X main.version={{.Version}}
@@ -21,12 +19,9 @@ builds:
 
 archives:
   - id: lazycut
-    builds: [lazycut]
+    ids: [lazycut]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
-    format_overrides:
-      - goos: windows
-        format: zip
+    formats: [tar.gz]
 
 release:
   draft: false
@@ -35,14 +30,14 @@ release:
 brews:
   - name: lazycut
     repository:
-      owner: emin-ozata
+      owner: ozemin
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
-    homepage: https://github.com/emin-ozata/lazycut
+    homepage: https://github.com/ozemin/lazycut
     description: Terminal-based video trimming TUI (ffmpeg + chafa)
     dependencies:
       - name: ffmpeg

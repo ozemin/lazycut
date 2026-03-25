@@ -307,10 +307,7 @@ func ExportWithProgress(opts ExportOptions, progress chan<- float64) (string, er
 		if strings.HasPrefix(line, "out_time_us=") {
 			timeStr := strings.TrimPrefix(line, "out_time_us=")
 			if micros, err := strconv.ParseFloat(timeStr, 64); err == nil && totalMicros > 0 {
-				p := micros / totalMicros
-				if p > 1.0 {
-					p = 1.0
-				}
+				p := min(micros/totalMicros, 1.0)
 				select {
 				case progress <- p:
 				default:
