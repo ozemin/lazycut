@@ -314,7 +314,7 @@ func (p *Player) renderLoop() {
 		fps := p.fps
 		frameInterval := p.frameInterval
 		version := p.seekVersion
-		streamWasReset := p.stream == nil && currentStream != nil
+		reset := p.stream == nil && currentStream != nil
 		p.mu.Unlock()
 
 		if width <= 0 || height <= 0 {
@@ -330,7 +330,7 @@ func (p *Player) renderLoop() {
 		videoHeight := p.properties.Height
 
 		// Seek detected or first start
-		if streamWasReset {
+		if reset {
 			currentStream.Close()
 			currentStream = nil
 		}

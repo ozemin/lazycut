@@ -11,6 +11,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const tickFPS = 30
+
 type TickMsg time.Time
 
 type ExportDoneMsg struct {
@@ -88,7 +90,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func tickCmd() tea.Cmd {
-	return tea.Tick(time.Second/30, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Second/tickFPS, func(t time.Time) tea.Msg {
 		return TickMsg(t)
 	})
 }
@@ -652,9 +654,9 @@ func (m Model) renderExportModal() string {
 	if m.exporting {
 		title := titleStyle.Render("Exporting")
 
-		barWidth := 50
-		filled := int(m.exportProgress * float64(barWidth))
-		empty := barWidth - filled
+		w := 50
+		filled := int(m.exportProgress * float64(w))
+		empty := w - filled
 		progressBar := dimStyle.Render("[") +
 			accentStyle.Render(strings.Repeat("=", filled)) +
 			dimStyle.Render(strings.Repeat("-", empty)+"]")
@@ -683,23 +685,23 @@ func (m Model) renderExportModal() string {
 		}
 
 		filename := m.exportFilename
-		filenameDisplay := filename
+		display := filename
 		if m.exportFocusField == 0 {
-			filenameDisplay = filename + dimStyle.Render("_")
+			display = filename + dimStyle.Render("_")
 		}
 		if filename == "" && m.exportFocusField != 0 {
-			filenameDisplay = dimStyle.Render("(auto)")
+			display = dimStyle.Render("(auto)")
 		}
 
-		fnIndicator := "  "
-		arIndicator := "  "
-		modeIndicator := "  "
+		fn := "  "
+		ar := "  "
+		mode := "  "
 		if m.exportFocusField == 0 {
-			fnIndicator = accentStyle.Render("> ")
+			fn = accentStyle.Render("> ")
 		} else if m.exportFocusField == 1 {
-			arIndicator = accentStyle.Render("> ")
+			ar = accentStyle.Render("> ")
 		} else {
-			modeIndicator = accentStyle.Render("> ")
+			mode = accentStyle.Render("> ")
 		}
 
 		var ratioLine string
@@ -727,10 +729,10 @@ func (m Model) renderExportModal() string {
 			keyStyle.Render("Enter") + labelStyle.Render(" export  ") +
 			keyStyle.Render("Esc") + labelStyle.Render(" cancel")
 
-		fields := fnIndicator + labelStyle.Render("Filename  ") + valueStyle.Render(filenameDisplay) + "\n\n" +
-			arIndicator + labelStyle.Render("Aspect    ") + ratioLine
+		fields := fn + labelStyle.Render("Filename  ") + valueStyle.Render(display) + "\n\n" +
+			ar + labelStyle.Render("Aspect    ") + ratioLine
 		if isMulti {
-			fields += "\n\n" + modeIndicator + labelStyle.Render("Mode      ") + modeLine
+			fields += "\n\n" + mode + labelStyle.Render("Mode      ") + modeLine
 		}
 
 		content = title + "\n\n" +

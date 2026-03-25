@@ -30,9 +30,6 @@ func (t *Timeline) Render(width, height int) string {
 	playing := t.player.IsPlaying()
 	trim := &t.player.Trim
 
-	posStr := formatDuration(pos)
-	durStr := formatDuration(dur)
-
 	playIcon := "▶ "
 	if playing {
 		playIcon = "❚❚"
@@ -48,11 +45,11 @@ func (t *Timeline) Render(width, height int) string {
 		barWidth = 10
 	}
 
-	line1 := fmt.Sprintf(" %s %s / %s  %s", playIcon, posStr, durStr, muteIcon)
-	line2 := " " + t.buildMarkerLine(barWidth, dur, trim)
-	line3 := " " + t.buildProgressBar(barWidth, pos, dur, trim)
-	line4 := " " + t.buildCursorLine(barWidth, pos, dur)
-	line5 := t.buildFooterHelp(width)
+	line1 := fmt.Sprintf(" %s %s / %s  %s", playIcon, formatDuration(pos), formatDuration(dur), muteIcon)
+	line2 := " " + t.markerLine(barWidth, dur, trim)
+	line3 := " " + t.progressBar(barWidth, pos, dur, trim)
+	line4 := " " + t.cursorLine(barWidth, pos, dur)
+	line5 := t.footerHelp(width)
 
 	content := strings.Join([]string{line1, line2, line3, line4, line5}, "\n")
 
@@ -62,27 +59,27 @@ func (t *Timeline) Render(width, height int) string {
 		Render(content)
 }
 
-func (t *Timeline) buildProgressBar(barWidth int, pos, dur time.Duration, trim *video.TrimState) string {
+func (t *Timeline) progressBar(barWidth int, pos, dur time.Duration, trim *video.TrimState) string {
 	if dur <= 0 {
 		return "[" + repeat("-", barWidth) + "]"
 	}
 
-	posIdx := int(float64(pos) / float64(dur) * float64(barWidth))
-	if posIdx > barWidth {
-		posIdx = barWidth
+	cursor := int(float64(pos) / float64(dur) * float64(barWidth))
+	if cursor > barWidth {
+		cursor = barWidth
 	}
 
-	var inIdx, outIdx int = -1, -1
+	var in, out int = -1, -1
 	if trim.InPoint != nil {
-		inIdx = int(float64(*trim.InPoint) / float64(dur) * float64(barWidth))
-		if inIdx > barWidth {
-			inIdx = barWidth
+		in = int(float64(*trim.InPoint) / float64(dur) * float64(barWidth))
+		if in > barWidth {
+			in = barWidth
 		}
 	}
 	if trim.OutPoint != nil {
-		outIdx = int(float64(*trim.OutPoint) / float64(dur) * float64(barWidth))
-		if outIdx > barWidth {
-			outIdx = barWidth
+		out = int(float64(*trim.OutPoint) / float64(dur) * float64(barWidth))
+		if out > barWidth {
+			out = barWidth
 		}
 	}
 
@@ -104,7 +101,7 @@ func (t *Timeline) buildProgressBar(barWidth int, pos, dur time.Duration, trim *
 	var bar strings.Builder
 	bar.WriteString("[")
 	for i := 0; i < barWidth; i++ {
-		inActive := inIdx >= 0 && outIdx >= 0 && i >= inIdx && i <= outIdx
+		inActive := in >= 0 && out >= 0 && i >= in && i <= out
 		inCommitted := false
 		for _, r := range committedRanges {
 			if i >= r.in && i <= r.out {
@@ -115,7 +112,7 @@ func (t *Timeline) buildProgressBar(barWidth int, pos, dur time.Duration, trim *
 
 		if inActive || inCommitted {
 			bar.WriteString("▓")
-		} else if i < posIdx {
+		} else if i < cursor {
 			bar.WriteString("=")
 		} else {
 			bar.WriteString("-")
@@ -126,7 +123,7 @@ func (t *Timeline) buildProgressBar(barWidth int, pos, dur time.Duration, trim *
 	return bar.String()
 }
 
-func (t *Timeline) buildMarkerLine(barWidth int, dur time.Duration, trim *video.TrimState) string {
+func (t *Timeline) markerLine(barWidth int, dur time.Duration, trim *video.TrimState) string {
 	if dur <= 0 {
 		return repeat(" ", barWidth+2)
 	}
@@ -154,25 +151,25 @@ func (t *Timeline) buildMarkerLine(barWidth int, dur time.Duration, trim *video.
 	}
 
 	if trim.InPoint != nil {
-		inIdx := int(float64(*trim.InPoint)/float64(dur)*float64(barWidth)) + 1
-		if inIdx >= len(line) {
-			inIdx = len(line) - 1
+		in := int(float64(*trim.InPoint)/float64(dur)*float64(barWidth)) + 1
+		if in >= len(line) {
+			in = len(line) - 1
 		}
-		line[inIdx] = inStyle.Render("▼")
+		line[in] = inStyle.Render("▼")
 	}
 
 	if trim.OutPoint != nil {
-		outIdx := int(float64(*trim.OutPoint)/float64(dur)*float64(barWidth)) + 1
-		if outIdx >= len(line) {
-			outIdx = len(line) - 1
+		out := int(float64(*trim.OutPoint)/float64(dur)*float64(barWidth)) + 1
+		if out >= len(line) {
+			out = len(line) - 1
 		}
-		line[outIdx] = outStyle.Render("▼")
+		line[out] = outStyle.Render("▼")
 	}
 
 	return strings.Join(line, "")
 }
 
-func (t *Timeline) buildCursorLine(barWidth int, pos, dur time.Duration) string {
+func (t *Timeline) cursorLine(barWidth int, pos, dur time.Duration) string {
 	if dur <= 0 {
 		return repeat(" ", barWidth+2)
 	}
@@ -182,11 +179,11 @@ func (t *Timeline) buildCursorLine(barWidth int, pos, dur time.Duration) string 
 		line[i] = ' '
 	}
 
-	posIdx := int(float64(pos)/float64(dur)*float64(barWidth)) + 1
-	if posIdx >= len(line) {
-		posIdx = len(line) - 1
+	cursor := int(float64(pos)/float64(dur)*float64(barWidth)) + 1
+	if cursor >= len(line) {
+		cursor = len(line) - 1
 	}
-	line[posIdx] = '▲'
+	line[cursor] = '▲'
 
 	return string(line)
 }
@@ -202,14 +199,10 @@ func repeat(s string, n int) string {
 	if n <= 0 {
 		return ""
 	}
-	result := ""
-	for i := 0; i < n; i++ {
-		result += s
-	}
-	return result
+	return strings.Repeat(s, n)
 }
 
-func (t *Timeline) buildFooterHelp(width int) string {
+func (t *Timeline) footerHelp(width int) string {
 	trim := &t.player.Trim
 	sections := t.player.Sections
 
@@ -227,9 +220,9 @@ func (t *Timeline) buildFooterHelp(width int) string {
 
 	sep := dimStyle.Render("  ·  ")
 
-	sectionBadge := ""
+	badge := ""
 	if len(sections) > 0 {
-		sectionBadge = dimStyle.Render(fmt.Sprintf("%d section(s)", len(sections))) + "  "
+		badge = dimStyle.Render(fmt.Sprintf("%d section(s)", len(sections))) + "  "
 	}
 
 	var result string
@@ -237,19 +230,19 @@ func (t *Timeline) buildFooterHelp(width int) string {
 	if t.exportStatus != "" {
 		result = " " + t.exportStatus
 	} else if len(sections) > 0 && trim.InPoint == nil {
-		removeLabel := "remove section"
+		remove := "remove section"
 		if len(sections) > 1 {
-			removeLabel = "remove last section"
+			remove = "remove last section"
 		}
-		previewLabel := "preview"
+		preview := "preview"
 		if len(sections) > 1 {
-			previewLabel = "preview all"
+			preview = "preview all"
 		}
-		hints := " " + sectionBadge +
+		hints := " " + badge +
 			kd("Enter", "export", true) + sep +
 			kd("i", "in", false) + "  " + kd("o", "out", false) + sep +
-			kd("X", removeLabel, false) + sep +
-			kd("p", previewLabel, false)
+			kd("X", remove, false) + sep +
+			kd("p", preview, false)
 		if len(sections) > 1 {
 			hints += "  " + kd("P", "preview last", false)
 		}
@@ -257,7 +250,7 @@ func (t *Timeline) buildFooterHelp(width int) string {
 			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + sep +
 			kd("?", "help", false)
 	} else if trim.InPoint != nil {
-		result = " " + sectionBadge + dimStyle.Render("IN set") + "  " +
+		result = " " + badge + dimStyle.Render("IN set") + "  " +
 			kd("o", "set out", true) + sep +
 			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + sep +
 			kd("d", "clear", false) + "  " + kd("?", "help", false)
