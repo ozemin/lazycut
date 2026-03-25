@@ -7,12 +7,10 @@ builds:
     main: .
     binary: lazycut
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     goos:
       - darwin
-      - windows
     goarch:
-      - amd64
       - arm64
     ldflags:
       - -s -w -X main.version={{.Version}}
@@ -21,12 +19,9 @@ builds:
 
 archives:
   - id: lazycut
-    builds: [lazycut]
+    ids: [lazycut]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
-    format_overrides:
-      - goos: windows
-        format: zip
+    formats: [tar.gz]
 
 release:
   draft: false
