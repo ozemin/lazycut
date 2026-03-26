@@ -1,31 +1,18 @@
 package video
 
-/*
-#cgo pkg-config: chafa
-#include <chafa.h>
-#include <stdlib.h>
-*/
-import "C"
 import (
+	"bytes"
 	"fmt"
 	"os"
-	"unsafe"
+	"os/exec"
 )
-
-const symbolSelector = "block+border+space"
 
 type ChafaConfig struct {
 	WorkFactor float32
-	CanvasMode C.ChafaCanvasMode
-	ColorSpace C.ChafaColorSpace
-	DitherMode C.ChafaDitherMode
 }
 
 var defaultChafaConfig = ChafaConfig{
-	WorkFactor: 0.5,
-	CanvasMode: C.CHAFA_CANVAS_MODE_TRUECOLOR,
-	ColorSpace: C.CHAFA_COLOR_SPACE_DIN99D,
-	DitherMode: C.CHAFA_DITHER_MODE_DIFFUSION,
+	WorkFactor: 0.25,
 }
 
 func (c ChafaConfig) Render(pixels []byte, pixW, pixH, termW, termH int) (string, error) {
@@ -33,38 +20,46 @@ func (c ChafaConfig) Render(pixels []byte, pixW, pixH, termW, termH int) (string
 		return "", fmt.Errorf("pixel buffer size mismatch: got %d, want %d", len(pixels), pixW*pixH*rgbaChannels)
 	}
 
-	sm := C.chafa_symbol_map_new()
-	defer C.chafa_symbol_map_unref(sm)
-	selectors := C.CString(symbolSelector)
-	defer C.free(unsafe.Pointer(selectors))
-	C.chafa_symbol_map_apply_selectors(sm, selectors, nil)
-
-	canvasMode := c.CanvasMode
-	if _, ok := os.LookupEnv("NO_COLOR"); ok {
-		canvasMode = C.CHAFA_CANVAS_MODE_FGBG_BGFG
+	var buf bytes.Buffer
+	buf.Grow(len("P6\n") + 20 + pixW*pixH*3)
+	fmt.Fprintf(&buf, "P6\n%d %d\n255\n", pixW, pixH)
+	for i := 0; i < len(pixels); i += rgbaChannels {
+		buf.WriteByte(pixels[i])
+		buf.WriteByte(pixels[i+1])
+		buf.WriteByte(pixels[i+2])
 	}
 
-	cfg := C.chafa_canvas_config_new()
-	defer C.chafa_canvas_config_unref(cfg)
-	C.chafa_canvas_config_set_geometry(cfg, C.gint(termW), C.gint(termH))
-	C.chafa_canvas_config_set_symbol_map(cfg, sm)
-	C.chafa_canvas_config_set_pixel_mode(cfg, C.CHAFA_PIXEL_MODE_SYMBOLS)
-	C.chafa_canvas_config_set_canvas_mode(cfg, canvasMode)
-	C.chafa_canvas_config_set_color_space(cfg, c.ColorSpace)
-	C.chafa_canvas_config_set_dither_mode(cfg, c.DitherMode)
-	C.chafa_canvas_config_set_work_factor(cfg, C.gfloat(c.WorkFactor))
+	work := int(c.WorkFactor*8) + 1
+	if work < 1 {
+		work = 1
+	} else if work > 9 {
+		work = 9
+	}
 
-	cv := C.chafa_canvas_new(cfg)
-	defer C.chafa_canvas_unref(cv)
+	colors := "full"
+	if _, ok := os.LookupEnv("NO_COLOR"); ok {
+		colors = "2"
+	}
 
-	C.chafa_canvas_draw_all_pixels(
-		cv,
-		C.CHAFA_PIXEL_RGBA8_UNASSOCIATED,
-		(*C.guint8)(unsafe.Pointer(&pixels[0])),
-		C.gint(pixW), C.gint(pixH), C.gint(pixW*rgbaChannels),
+	cmd := exec.Command("chafa",
+		"--size", fmt.Sprintf("%dx%d", termW, termH),
+		"--symbols", "block+border+space",
+		"--colors", colors,
+		"--color-space", "din99d",
+		"--dither", "noise",
+		"--color-extractor", "median",
+		"--optimize", "5",
+		"--format", "symbols",
+		"--probe", "off",
+		"--work", fmt.Sprintf("%d", work),
+		"--animate", "off",
+		"-",
 	)
+	cmd.Stdin = &buf
 
-	gs := C.chafa_canvas_print(cv, nil)
-	defer C.g_string_free(gs, C.TRUE)
-	return C.GoString(gs.str), nil
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("chafa: %w", err)
+	}
+	return string(out), nil
 }
