@@ -15,33 +15,29 @@ Terminal-based video trimming tool. Mark in/out points and export trimmed clips 
 ### macOS
 
 ```bash
-brew install ozemin/tap/lazycut
+brew install lazycut
 ```
 
 ### Build from source
 
-Or build from source:
 ```bash
 git clone https://github.com/ozemin/lazycut.git
 cd lazycut
 go build
-./lazycut video.mp4
 ```
+
+Requires [FFmpeg](https://ffmpeg.org) and [Chafa](https://hpjansson.org/chafa/).
 
 ## Usage
 
+```bash
+lazycut video.mp4              # interactive TUI
+lazycut video.mp4 --fps 12     # custom preview frame rate
+lazycut trim --in 00:01:00 --out 00:02:00 -o out.mp4 video.mp4
+lazycut probe video.mp4
 ```
-lazycut <video-file>
-```
 
-### Flags
-
-| Flag | Description |
-|------|-------------|
-| `-h`, `--help` | Show help |
-| `-v`, `--version` | Show version |
-
-### Keyboard Shortcuts
+## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
@@ -52,12 +48,21 @@ lazycut <video-file>
 | `0` | Go to start |
 | `G` / `$` | Go to end |
 | `i` / `o` | Set in/out points |
-| `p` | Preview selection |
+| `X` | Remove last section |
+| `p` / `P` | Preview all / last section |
 | `d` / `Esc` | Clear selection |
 | `Enter` | Export |
-| `u` | Undo last trim change |
+| `u` | Undo |
 | `m` | Toggle mute |
 | `?` | Help |
 | `q` | Quit |
 
-Repeat counts work for seek controls: `5l` = seek forward 5 seconds, `10.` = step forward 10 frames.
+Vim-style repeat counts: `5l` = seek 5s forward, `10.` = step 10 frames.
+
+## Export
+
+Supports multiple sections per video, separate or concatenated export, and aspect ratio conversion (16:9, 9:16, 1:1, 4:5).
+
+## License
+
+[MIT](LICENSE)
