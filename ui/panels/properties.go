@@ -46,12 +46,14 @@ func (p *Properties) Render(width, height int) string {
 	addLine("Size", props.FormattedFileSize())
 	addLine("Duration", props.FormattedDuration())
 
+	fps := p.player.FPS()
+
 	for i, sec := range p.player.Sections {
 		lines = append(lines, "")
 		lines = append(lines, headerStyle.Render(fmt.Sprintf("Section %d", i+1)))
-		addLine("In", formatTime(sec.In))
-		addLine("Out", formatTime(sec.Out))
-		addLine("Length", formatTime(sec.Duration()))
+		addLine("In", formatTime(sec.In, fps))
+		addLine("Out", formatTime(sec.Out, fps))
+		addLine("Length", formatTime(sec.Duration(), fps))
 	}
 
 	trim := &p.player.Trim
@@ -60,13 +62,13 @@ func (p *Properties) Render(width, height int) string {
 		lines = append(lines, headerStyle.Render("Selection"))
 
 		if trim.InPoint != nil {
-			addLine("In", formatTime(*trim.InPoint))
+			addLine("In", formatTime(*trim.InPoint, fps))
 		}
 		if trim.OutPoint != nil {
-			addLine("Out", formatTime(*trim.OutPoint))
+			addLine("Out", formatTime(*trim.OutPoint, fps))
 		}
 		if trim.IsComplete() {
-			addLine("Length", formatTime(trim.Duration()))
+			addLine("Length", formatTime(trim.Duration(), fps))
 			addLine("Est. Size", props.EstimateOutputSize(trim.Duration()))
 		}
 	}
@@ -79,11 +81,14 @@ func (p *Properties) Render(width, height int) string {
 		Render(content)
 }
 
-func formatTime(d interface{ Seconds() float64 }) string {
+func formatTime(d interface{ Seconds() float64 }, fps int) string {
 	s := d.Seconds()
 	total := int(s)
 	mins := total / 60
 	secs := total % 60
-	tenths := int(s*10) % 10
-	return fmt.Sprintf("%02d:%02d.%d", mins, secs, tenths)
+	frame := 0
+	if fps > 0 {
+		frame = int(s*float64(fps)) % fps
+	}
+	return fmt.Sprintf("%02d:%02d.%02d", mins, secs, frame)
 }
