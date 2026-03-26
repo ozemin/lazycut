@@ -43,8 +43,18 @@ brews:
       - name: ffmpeg
       - name: chafa
     test: |
-      output = shell_output("#{bin}/lazycut 2>&1", 1)
-      assert_match "Usage: lazycut", output
+      system "ffmpeg", "-y", "-f", "lavfi", "-i",
+        "color=c=red:s=320x240:d=1:r=25",
+        "-c:v", "libx264", "-t", "1",
+        testpath/"test.mp4"
+      output = shell_output("#{bin}/lazycut probe #{testpath}/test.mp4")
+      assert_match "Resolution: 320x240", output
+      assert_match "Codec:      h264", output
+      system bin/"lazycut", "trim",
+        "--in", "00:00:00", "--out", "00:00:01",
+        "-o", testpath/"trimmed.mp4",
+        testpath/"test.mp4"
+      assert_path_exists testpath/"trimmed.mp4"
 
 changelog:
   use: github

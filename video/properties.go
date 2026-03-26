@@ -135,6 +135,18 @@ func (p *VideoProperties) FormattedDuration() string {
 	return fmt.Sprintf("%02d:%02d", mins, secs)
 }
 
+func (p *VideoProperties) Summary(filename string) string {
+	return fmt.Sprintf("File:       %s\nResolution: %s\nDuration:   %s\nCodec:      %s\nFPS:        %s\nBitrate:    %s\nSize:       %s\n",
+		filename,
+		p.Resolution(),
+		p.FormattedDuration(),
+		p.Codec,
+		p.FormattedFPS(),
+		p.FormattedBitrate(),
+		p.FormattedFileSize(),
+	)
+}
+
 func (p *VideoProperties) EstimateOutputSize(selectionDuration time.Duration) string {
 	if p.Bitrate == 0 || p.Duration == 0 {
 		return "N/A"

@@ -509,15 +509,11 @@ func getInstallCommand(packageName string) string {
 	}
 }
 
-func CheckDependencies() error {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		return fmt.Errorf("ffmpeg not found. Install: %s", getInstallCommand("ffmpeg"))
-	}
-	if _, err := exec.LookPath("ffprobe"); err != nil {
-		return fmt.Errorf("ffprobe not found. Install: %s", getInstallCommand("ffmpeg"))
-	}
-	if _, err := exec.LookPath("ffplay"); err != nil {
-		return fmt.Errorf("ffplay not found. Install: %s", getInstallCommand("ffmpeg"))
+func CheckBinaries(names ...string) error {
+	for _, name := range names {
+		if _, err := exec.LookPath(name); err != nil {
+			return fmt.Errorf("%s not found. Install: %s", name, getInstallCommand("ffmpeg"))
+		}
 	}
 	return nil
 }
