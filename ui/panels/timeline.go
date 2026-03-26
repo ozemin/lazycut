@@ -225,16 +225,17 @@ func (t *Timeline) footerHelp(width int) string {
 			hints += "  " + kd("P", "preview last", false)
 		}
 		result = hints + sep +
-			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + sep +
+			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + "  " + kd("j/k", "±1m", false) + "  " + kd("J/K", "±5m", false) + sep +
 			kd("?", "help", false)
 	} else if trim.InPoint != nil {
 		result = " " + badge + dimStyle.Render("IN set") + "  " +
 			kd("o", "set out", true) + sep +
-			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + sep +
+			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + "  " + kd("j/k", "±1m", false) + "  " + kd("J/K", "±5m", false) + sep +
 			kd("d", "clear", false) + "  " + kd("?", "help", false)
 	} else {
 		result = " " + kd("i", "in", false) + "  " + kd("o", "out", false) + sep +
-			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + "  " + kd(",/.", "±frame", false) + sep +
+			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + "  " + kd("j/k", "±1m", false) + "  " + kd("J/K", "±5m", false) + "  " + kd(",/.", "±frame", false) + sep +
+			kd("a", "aspect", false) + "  " + kd("f", "fullscreen", false) + sep +
 			kd("m", "mute", false) + sep +
 			kd("?", "help", false)
 	}
