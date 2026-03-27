@@ -498,35 +498,6 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		switch msg.String() {
-		case "j":
-			if m.exportFocusField < maxField {
-				m.exportFocusField++
-			}
-			return m, nil
-		case "k":
-			if m.exportFocusField > 0 {
-				m.exportFocusField--
-			}
-			return m, nil
-		case "h":
-			if m.exportFocusField == 1 {
-				m.exportAspectRatio--
-				if m.exportAspectRatio < 0 {
-					m.exportAspectRatio = len(video.AspectRatioOptions) - 1
-				}
-			} else if m.exportFocusField == 2 {
-				m.exportMode = (m.exportMode + 1) % 2
-			}
-			return m, nil
-		case "l":
-			if m.exportFocusField == 1 {
-				m.exportAspectRatio = (m.exportAspectRatio + 1) % len(video.AspectRatioOptions)
-			} else if m.exportFocusField == 2 {
-				m.exportMode = (m.exportMode + 1) % 2
-			}
-			return m, nil
-		}
 		if m.exportFocusField == 0 && len(msg.Runes) > 0 {
 			m.exportFilename += string(msg.Runes)
 		}
