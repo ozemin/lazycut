@@ -3,9 +3,7 @@ package video
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -477,43 +475,5 @@ func (p *Player) renderFrame(position time.Duration, width, height int) (string,
 }
 
 func (p *Player) renderFrameFromPixels(pixels []byte, pixW, pixH, termW, termH int) (string, error) {
-	return defaultChafaConfig.Render(pixels, pixW, pixH, termW, termH)
-}
-
-func getInstallCommand(packageName string) string {
-	switch runtime.GOOS {
-	case "darwin":
-		return fmt.Sprintf("brew install %s", packageName)
-	case "linux":
-		// Detect Linux package manager
-		if _, err := os.Stat("/etc/debian_version"); err == nil {
-			return fmt.Sprintf("sudo apt install %s", packageName)
-		}
-		if _, err := os.Stat("/etc/redhat-release"); err == nil {
-			return fmt.Sprintf("sudo dnf install %s", packageName)
-		}
-		// Fallback for unknown Linux distro
-		return fmt.Sprintf("sudo apt install %s (Debian/Ubuntu) or sudo dnf install %s (Fedora/RHEL)", packageName, packageName)
-	case "windows":
-		// Map package names for Windows winget
-		wingetPackages := map[string]string{
-			"ffmpeg": "Gyan.FFmpeg",
-		}
-		if wingetName, ok := wingetPackages[packageName]; ok {
-			return fmt.Sprintf("winget install %s", wingetName)
-		}
-		return fmt.Sprintf("winget install %s", packageName)
-	default:
-		// Unknown OS, show all options
-		return fmt.Sprintf("brew install %s (macOS) or sudo apt install %s (Linux)", packageName, packageName)
-	}
-}
-
-func CheckBinaries(names ...string) error {
-	for _, name := range names {
-		if _, err := exec.LookPath(name); err != nil {
-			return fmt.Errorf("%s not found. Install: %s", name, getInstallCommand("ffmpeg"))
-		}
-	}
-	return nil
+	return renderChafa(pixels, pixW, pixH, termW, termH)
 }

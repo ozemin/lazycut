@@ -15,10 +15,6 @@ var probeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		videoPath := args[0]
 
-		if err := video.CheckBinaries("ffprobe"); err != nil {
-			return err
-		}
-
 		props, err := video.GetVideoProperties(videoPath)
 		if err != nil {
 			return fmt.Errorf("failed to get video properties: %v", err)

@@ -7,15 +7,7 @@ import (
 	"os/exec"
 )
 
-type ChafaConfig struct {
-	WorkFactor float32
-}
-
-var defaultChafaConfig = ChafaConfig{
-	WorkFactor: 0.25,
-}
-
-func (c ChafaConfig) Render(pixels []byte, pixW, pixH, termW, termH int) (string, error) {
+func renderChafa(pixels []byte, pixW, pixH, termW, termH int) (string, error) {
 	if len(pixels) != pixW*pixH*rgbaChannels {
 		return "", fmt.Errorf("pixel buffer size mismatch: got %d, want %d", len(pixels), pixW*pixH*rgbaChannels)
 	}
@@ -27,13 +19,6 @@ func (c ChafaConfig) Render(pixels []byte, pixW, pixH, termW, termH int) (string
 		buf.WriteByte(pixels[i])
 		buf.WriteByte(pixels[i+1])
 		buf.WriteByte(pixels[i+2])
-	}
-
-	work := int(c.WorkFactor*8) + 1
-	if work < 1 {
-		work = 1
-	} else if work > 9 {
-		work = 9
 	}
 
 	colors := "full"
@@ -51,7 +36,7 @@ func (c ChafaConfig) Render(pixels []byte, pixW, pixH, termW, termH int) (string
 		"--optimize", "5",
 		"--format", "symbols",
 		"--probe", "off",
-		"--work", fmt.Sprintf("%d", work),
+		"--work", "3",
 		"--animate", "off",
 		"-",
 	)

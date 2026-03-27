@@ -29,10 +29,6 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		videoPath := args[0]
 
-		if err := video.CheckBinaries("ffmpeg", "ffprobe"); err != nil {
-			return err
-		}
-
 		inPoint, err := parseTimestamp(trimIn)
 		if err != nil {
 			return fmt.Errorf("invalid --in timestamp: %v", err)

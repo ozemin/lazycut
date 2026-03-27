@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/ozemin/lazycut/ui"
 	"github.com/ozemin/lazycut/video"
@@ -42,17 +43,17 @@ Keyboard Shortcuts:
   m               Toggle mute
   ?               Show keyboard shortcuts
   q               Quit`,
-	Args:    validateVideoArg,
+	SilenceUsage: true,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return requireDependencies("ffmpeg", "ffprobe", "chafa")
+	},
+	Args: validateVideoArg,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if _, ok := os.LookupEnv("NO_COLOR"); ok {
 			lipgloss.SetColorProfile(termenv.Ascii)
 		}
 
 		videoPath := args[0]
-
-		if err := video.CheckBinaries("ffmpeg", "ffprobe", "ffplay"); err != nil {
-			return err
-		}
 
 		player, err := video.NewPlayer(videoPath, fps)
 		if err != nil {
@@ -94,4 +95,13 @@ func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func requireDependencies(names ...string) error {
+	for _, name := range names {
+		if _, err := exec.LookPath(name); err != nil {
+			return fmt.Errorf("%s is not installed", name)
+		}
+	}
+	return nil
 }
