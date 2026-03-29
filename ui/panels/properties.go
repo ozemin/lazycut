@@ -2,8 +2,9 @@ package panels
 
 import (
 	"fmt"
-	"github.com/emin-ozata/lazycut/video"
 	"strings"
+
+	"github.com/ozemin/lazycut/video"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -29,8 +30,9 @@ func (p *Properties) Render(width, height int) string {
 
 	var lines []string
 
-	labelStyle := lipgloss.NewStyle().Width(12)
-	valueStyle := lipgloss.NewStyle()
+	labelStyle := lipgloss.NewStyle().Width(12).Foreground(lipgloss.Color("245"))
+	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252"))
 
 	addLine := func(label, value string) {
 		line := labelStyle.Render(label) + valueStyle.Render(value)
@@ -44,19 +46,29 @@ func (p *Properties) Render(width, height int) string {
 	addLine("Size", props.FormattedFileSize())
 	addLine("Duration", props.FormattedDuration())
 
+	fps := p.player.FPS()
+
+	for i, sec := range p.player.Sections {
+		lines = append(lines, "")
+		lines = append(lines, headerStyle.Render(fmt.Sprintf("Section %d", i+1)))
+		addLine("In", formatTime(sec.In, fps))
+		addLine("Out", formatTime(sec.Out, fps))
+		addLine("Length", formatTime(sec.Duration(), fps))
+	}
+
 	trim := &p.player.Trim
 	if trim.InPoint != nil || trim.OutPoint != nil {
 		lines = append(lines, "")
-		lines = append(lines, "Selection")
+		lines = append(lines, headerStyle.Render("Selection"))
 
 		if trim.InPoint != nil {
-			addLine("In", formatTime(*trim.InPoint))
+			addLine("In", formatTime(*trim.InPoint, fps))
 		}
 		if trim.OutPoint != nil {
-			addLine("Out", formatTime(*trim.OutPoint))
+			addLine("Out", formatTime(*trim.OutPoint, fps))
 		}
 		if trim.IsComplete() {
-			addLine("Length", formatTime(trim.Duration()))
+			addLine("Length", formatTime(trim.Duration(), fps))
 			addLine("Est. Size", props.EstimateOutputSize(trim.Duration()))
 		}
 	}
@@ -69,9 +81,14 @@ func (p *Properties) Render(width, height int) string {
 		Render(content)
 }
 
-func formatTime(d interface{ Seconds() float64 }) string {
-	total := int(d.Seconds())
+func formatTime(d interface{ Seconds() float64 }, fps int) string {
+	s := d.Seconds()
+	total := int(s)
 	mins := total / 60
 	secs := total % 60
-	return fmt.Sprintf("%02d:%02d", mins, secs)
+	frame := 0
+	if fps > 0 {
+		frame = int(s*float64(fps)) % fps
+	}
+	return fmt.Sprintf("%02d:%02d.%02d", mins, secs, frame)
 }

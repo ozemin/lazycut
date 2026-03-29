@@ -2,14 +2,28 @@ package ui
 
 import (
 	"fmt"
-	"github.com/emin-ozata/lazycut/ui/panels"
-	"github.com/emin-ozata/lazycut/video"
 	"strings"
 	"time"
+
+	"github.com/ozemin/lazycut/ui/panels"
+	"github.com/ozemin/lazycut/video"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+const tickFPS = 30
+
+var logo = []string{
+	` ██╗      █████╗ ███████╗██╗   ██╗ ██████╗██╗   ██╗████████╗`,
+	` ██║     ██╔══██╗╚══███╔╝╚██╗ ██╔╝██╔════╝██║   ██║╚══██╔══╝`,
+	` ██║     ███████║  ███╔╝  ╚████╔╝ ██║     ██║   ██║   ██║   `,
+	` ██║     ██╔══██║ ███╔╝    ╚██╔╝  ██║     ██║   ██║   ██║   `,
+	` ███████╗██║  ██║███████╗   ██║   ╚██████╗╚██████╔╝   ██║   `,
+	` ╚══════╝╚═╝  ╚═╝╚══════╝   ╚═╝    ╚═════╝ ╚═════╝    ╚═╝   `,
+}
+
+type splashDoneMsg struct{}
 
 type TickMsg time.Time
 
@@ -23,11 +37,11 @@ type ExportProgressMsg float64
 type Model struct {
 	width        int
 	height       int
+	splashDone   bool
 	player       *video.Player
 	preview      *panels.Preview
 	properties   *panels.Properties
 	timeline     *panels.Timeline
-	ready        bool
 	previewMode  bool
 	exportStatus string
 
@@ -60,7 +74,6 @@ func NewModel(player *video.Player) Model {
 		preview:    panels.NewPreview(player),
 		properties: panels.NewProperties(player),
 		timeline:   panels.NewTimeline(player),
-		ready:      false,
 	}
 }
 
@@ -88,7 +101,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 func tickCmd() tea.Cmd {
-	return tea.Tick(time.Second/30, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Second/tickFPS, func(t time.Time) tea.Msg {
 		return TickMsg(t)
 	})
 }
@@ -114,12 +127,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case splashDoneMsg:
+		m.splashDone = true
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.ready = true
 		dims := CalculatePanelDimensions(m.width, m.height)
 		m.player.SetSize(dims.PreviewContentWidth, dims.PreviewContentHeight)
+		if !m.splashDone {
+			return m, tea.Tick(800*time.Millisecond, func(t time.Time) tea.Msg {
+				return splashDoneMsg{}
+			})
+		}
 		return m, nil
 
 	case TickMsg:
@@ -147,24 +168,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showExportModal {
 			return m.handleExportModalKey(msg)
 		}
-		m.exportStatus = ""
-
 		pos := m.player.Position()
 		fps := m.player.FPS()
 		frameDuration := time.Second / time.Duration(fps)
 
-		switch msg.String() {
+		key := msg.String()
+		isDigit := len(key) == 1 && key[0] >= '1' && key[0] <= '9'
+		isZero := key == "0" && m.repeatCount > 0
+		pendingRepeat := m.repeatCount
+		if !isDigit && !isZero {
+			m.exportStatus = ""
+			m.repeatCount = 0
+		}
+
+		switch key {
 		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-			m.repeatCount = m.repeatCount*10 + int(msg.Runes[0]-'0')
-			m.exportStatus = fmt.Sprintf("%dx", m.repeatCount)
+			m.repeatCount = pendingRepeat*10 + int(msg.Runes[0]-'0')
 			return m, nil
 		case "0":
-			if m.repeatCount == 0 {
+			if pendingRepeat == 0 {
 				m.player.Seek(0)
 				return m, nil
 			}
-			m.repeatCount *= 10
-			m.exportStatus = fmt.Sprintf("%dx", m.repeatCount)
+			m.repeatCount = pendingRepeat * 10
 			return m, nil
 		case "ctrl+c", "q":
 			m.player.Close()
@@ -175,62 +201,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "h":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos - time.Duration(n)*time.Second)
-			m.repeatCount = 0
 			return m, nil
 
 		case "l":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos + time.Duration(n)*time.Second)
-			m.repeatCount = 0
 			return m, nil
 
 		case "H":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos - time.Duration(n*5)*time.Second)
-			m.repeatCount = 0
 			return m, nil
 
 		case "L":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos + time.Duration(n*5)*time.Second)
-			m.repeatCount = 0
 			return m, nil
 
 		case ",":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos - time.Duration(n)*frameDuration)
-			m.repeatCount = 0
 			return m, nil
 
 		case ".":
-			n := m.repeatCount
+			n := pendingRepeat
 			if n <= 0 {
 				n = 1
 			}
 			m.player.Seek(pos + time.Duration(n)*frameDuration)
-			m.repeatCount = 0
 			return m, nil
 
 		case "$", "G":
 			m.player.Seek(m.player.Duration())
-			m.repeatCount = 0
 			return m, nil
 
 		case "i":
@@ -334,9 +353,21 @@ func renderPanel(content string, width, height int) string {
 		Render(paddedContent)
 }
 
+func (m Model) renderSplash() string {
+	logoStr := lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true).Render(strings.Join(logo, "\n"))
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		Align(lipgloss.Center, lipgloss.Center).
+		Render(logoStr)
+}
+
 func (m Model) View() string {
-	if !m.ready {
-		return "Initializing..."
+	if m.width == 0 {
+		return ""
+	}
+	if !m.splashDone {
+		return m.renderSplash()
 	}
 
 	dims := CalculatePanelDimensions(m.width, m.height)
@@ -358,6 +389,11 @@ func (m Model) View() string {
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, previewPanel, propertiesPanel)
 
 	m.timeline.SetExportStatus(m.exportStatus)
+	repeatDisplay := ""
+	if m.repeatCount > 0 {
+		repeatDisplay = fmt.Sprintf("%dx", m.repeatCount)
+	}
+	m.timeline.SetRepeatDisplay(repeatDisplay)
 	timelineContent := m.timeline.Render(dims.TimelineContentWidth, dims.TimelineContentHeight)
 	timelinePanel := renderPanel(timelineContent, dims.TimelineWidth, dims.TimelineHeight)
 
@@ -462,35 +498,6 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		switch msg.String() {
-		case "j":
-			if m.exportFocusField < maxField {
-				m.exportFocusField++
-			}
-			return m, nil
-		case "k":
-			if m.exportFocusField > 0 {
-				m.exportFocusField--
-			}
-			return m, nil
-		case "h":
-			if m.exportFocusField == 1 {
-				m.exportAspectRatio--
-				if m.exportAspectRatio < 0 {
-					m.exportAspectRatio = len(video.AspectRatioOptions) - 1
-				}
-			} else if m.exportFocusField == 2 {
-				m.exportMode = (m.exportMode + 1) % 2
-			}
-			return m, nil
-		case "l":
-			if m.exportFocusField == 1 {
-				m.exportAspectRatio = (m.exportAspectRatio + 1) % len(video.AspectRatioOptions)
-			} else if m.exportFocusField == 2 {
-				m.exportMode = (m.exportMode + 1) % 2
-			}
-			return m, nil
-		}
 		if m.exportFocusField == 0 && len(msg.Runes) > 0 {
 			m.exportFilename += string(msg.Runes)
 		}
@@ -652,9 +659,9 @@ func (m Model) renderExportModal() string {
 	if m.exporting {
 		title := titleStyle.Render("Exporting")
 
-		barWidth := 50
-		filled := int(m.exportProgress * float64(barWidth))
-		empty := barWidth - filled
+		w := 50
+		filled := int(m.exportProgress * float64(w))
+		empty := w - filled
 		progressBar := dimStyle.Render("[") +
 			accentStyle.Render(strings.Repeat("=", filled)) +
 			dimStyle.Render(strings.Repeat("-", empty)+"]")
@@ -671,35 +678,36 @@ func (m Model) renderExportModal() string {
 
 		var sectionList string
 		if isMulti {
+			fps := m.player.FPS()
 			for i, sec := range sections {
 				sectionList += dimStyle.Render(fmt.Sprintf("  #%d  %s → %s  (%s)",
 					i+1,
-					formatDuration(sec.In),
-					formatDuration(sec.Out),
-					formatDuration(sec.Duration()),
+					formatDuration(sec.In, fps),
+					formatDuration(sec.Out, fps),
+					formatDuration(sec.Duration(), fps),
 				)) + "\n"
 			}
 			sectionList += "\n"
 		}
 
 		filename := m.exportFilename
-		filenameDisplay := filename
+		display := filename
 		if m.exportFocusField == 0 {
-			filenameDisplay = filename + dimStyle.Render("_")
+			display = filename + dimStyle.Render("_")
 		}
 		if filename == "" && m.exportFocusField != 0 {
-			filenameDisplay = dimStyle.Render("(auto)")
+			display = dimStyle.Render("(auto)")
 		}
 
-		fnIndicator := "  "
-		arIndicator := "  "
-		modeIndicator := "  "
+		fn := "  "
+		ar := "  "
+		mode := "  "
 		if m.exportFocusField == 0 {
-			fnIndicator = accentStyle.Render("> ")
+			fn = accentStyle.Render("> ")
 		} else if m.exportFocusField == 1 {
-			arIndicator = accentStyle.Render("> ")
+			ar = accentStyle.Render("> ")
 		} else {
-			modeIndicator = accentStyle.Render("> ")
+			mode = accentStyle.Render("> ")
 		}
 
 		var ratioLine string
@@ -727,10 +735,10 @@ func (m Model) renderExportModal() string {
 			keyStyle.Render("Enter") + labelStyle.Render(" export  ") +
 			keyStyle.Render("Esc") + labelStyle.Render(" cancel")
 
-		fields := fnIndicator + labelStyle.Render("Filename  ") + valueStyle.Render(filenameDisplay) + "\n\n" +
-			arIndicator + labelStyle.Render("Aspect    ") + ratioLine
+		fields := fn + labelStyle.Render("Filename  ") + valueStyle.Render(display) + "\n\n" +
+			ar + labelStyle.Render("Aspect    ") + ratioLine
 		if isMulti {
-			fields += "\n\n" + modeIndicator + labelStyle.Render("Mode      ") + modeLine
+			fields += "\n\n" + mode + labelStyle.Render("Mode      ") + modeLine
 		}
 
 		content = title + "\n\n" +
@@ -750,9 +758,13 @@ func (m Model) renderExportModal() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }
 
-func formatDuration(d time.Duration) string {
+func formatDuration(d time.Duration, fps int) string {
 	total := int(d.Seconds())
 	mins := total / 60
 	secs := total % 60
-	return fmt.Sprintf("%02d:%02d", mins, secs)
+	frame := 0
+	if fps > 0 {
+		frame = int(d.Seconds()*float64(fps)) % fps
+	}
+	return fmt.Sprintf("%02d:%02d.%02d", mins, secs, frame)
 }

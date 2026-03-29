@@ -3,8 +3,8 @@
 [![Go Version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev)
 [![FFmpeg](https://img.shields.io/badge/requires-ffmpeg-007808?logo=ffmpeg)](https://ffmpeg.org)
 [![Chafa](https://img.shields.io/badge/requires-chafa-4B0082)](https://hpjansson.org/chafa/)
-[![License](https://img.shields.io/github/license/emin-ozata/lazycut)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/emin-ozata/lazycut)](https://github.com/emin-ozata/lazycut/releases)
+[![License](https://img.shields.io/github/license/ozemin/lazycut)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/ozemin/lazycut)](https://github.com/ozemin/lazycut/releases)
 
 Terminal-based video trimming tool. Mark in/out points and export trimmed clips with aspect ratio control.
 
@@ -15,19 +15,8 @@ Terminal-based video trimming tool. Mark in/out points and export trimmed clips 
 ### macOS
 
 ```bash
-brew tap emin-ozata/homebrew-tap
 brew install lazycut
 ```
-
-### Windows
-
-Download the latest Windows binary from the [releases page](https://github.com/emin-ozata/lazycut/releases):
-- `lazycut_X.X.X_windows_amd64.zip`
-
-Extract and add to your PATH, or run directly.
-
-**Dependencies:**
-- ffmpeg: `winget install ffmpeg` or download from [ffmpeg.org](https://ffmpeg.org)
 
 ### Build from source
 Prerequisites: Latest version of Golang + ffmpeg + chafa dev packages.
@@ -47,24 +36,22 @@ sudo dnf install -y ffmpeg chafa chafa-devel
 </details>
 
 ```bash
-go install github.com/emin-ozata/lazycut@latest
+go install github.com/ozemin/lazycut@latest 
 ./lazycut video.mp4
 ```
 
+Requires [FFmpeg](https://ffmpeg.org) and [Chafa](https://hpjansson.org/chafa/).
+
 ## Usage
 
+```bash
+lazycut video.mp4              # interactive TUI
+lazycut video.mp4 --fps 12     # custom preview frame rate
+lazycut trim --in 00:01:00 --out 00:02:00 -o out.mp4 video.mp4
+lazycut probe video.mp4
 ```
-lazycut <video-file>
-```
 
-### Flags
-
-| Flag | Description |
-|------|-------------|
-| `-h`, `--help` | Show help |
-| `-v`, `--version` | Show version |
-
-### Keyboard Shortcuts
+## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
@@ -75,12 +62,21 @@ lazycut <video-file>
 | `0` | Go to start |
 | `G` / `$` | Go to end |
 | `i` / `o` | Set in/out points |
-| `p` | Preview selection |
+| `X` | Remove last section |
+| `p` / `P` | Preview all / last section |
 | `d` / `Esc` | Clear selection |
 | `Enter` | Export |
-| `u` | Undo last trim change |
+| `u` | Undo |
 | `m` | Toggle mute |
 | `?` | Help |
 | `q` | Quit |
 
-Repeat counts work for seek controls: `5l` = seek forward 5 seconds, `10.` = step forward 10 frames.
+Vim-style repeat counts: `5l` = seek 5s forward, `10.` = step 10 frames.
+
+## Export
+
+Supports multiple sections per video, separate or concatenated export, and aspect ratio conversion (16:9, 9:16, 1:1, 4:5).
+
+## License
+
+[MIT](LICENSE)

@@ -3,9 +3,7 @@ package video
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -217,12 +215,8 @@ func (p *Player) Position() time.Duration {
 
 func (p *Player) Seek(position time.Duration) {
 	p.mu.Lock()
-	if position < 0 {
-		position = 0
-	}
-	if position > p.duration {
-		position = p.duration
-	}
+	position = max(position, 0)
+	position = min(position, p.duration)
 	p.position = position
 	if p.playing {
 		p.seekVersion++
@@ -314,7 +308,7 @@ func (p *Player) renderLoop() {
 		fps := p.fps
 		frameInterval := p.frameInterval
 		version := p.seekVersion
-		streamWasReset := p.stream == nil && currentStream != nil
+		reset := p.stream == nil && currentStream != nil
 		p.mu.Unlock()
 
 		if width <= 0 || height <= 0 {
@@ -330,7 +324,7 @@ func (p *Player) renderLoop() {
 		videoHeight := p.properties.Height
 
 		// Seek detected or first start
-		if streamWasReset {
+		if reset {
 			currentStream.Close()
 			currentStream = nil
 		}
@@ -481,47 +475,5 @@ func (p *Player) renderFrame(position time.Duration, width, height int) (string,
 }
 
 func (p *Player) renderFrameFromPixels(pixels []byte, pixW, pixH, termW, termH int) (string, error) {
-	return defaultChafaConfig.Render(pixels, pixW, pixH, termW, termH)
-}
-
-func getInstallCommand(packageName string) string {
-	switch runtime.GOOS {
-	case "darwin":
-		return fmt.Sprintf("brew install %s", packageName)
-	case "linux":
-		// Detect Linux package manager
-		if _, err := os.Stat("/etc/debian_version"); err == nil {
-			return fmt.Sprintf("sudo apt install %s", packageName)
-		}
-		if _, err := os.Stat("/etc/redhat-release"); err == nil {
-			return fmt.Sprintf("sudo dnf install %s", packageName)
-		}
-		// Fallback for unknown Linux distro
-		return fmt.Sprintf("sudo apt install %s (Debian/Ubuntu) or sudo dnf install %s (Fedora/RHEL)", packageName, packageName)
-	case "windows":
-		// Map package names for Windows winget
-		wingetPackages := map[string]string{
-			"ffmpeg": "Gyan.FFmpeg",
-		}
-		if wingetName, ok := wingetPackages[packageName]; ok {
-			return fmt.Sprintf("winget install %s", wingetName)
-		}
-		return fmt.Sprintf("winget install %s", packageName)
-	default:
-		// Unknown OS, show all options
-		return fmt.Sprintf("brew install %s (macOS) or sudo apt install %s (Linux)", packageName, packageName)
-	}
-}
-
-func CheckDependencies() error {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		return fmt.Errorf("ffmpeg not found. Install: %s", getInstallCommand("ffmpeg"))
-	}
-	if _, err := exec.LookPath("ffprobe"); err != nil {
-		return fmt.Errorf("ffprobe not found. Install: %s", getInstallCommand("ffmpeg"))
-	}
-	if _, err := exec.LookPath("ffplay"); err != nil {
-		return fmt.Errorf("ffplay not found. Install: %s", getInstallCommand("ffmpeg"))
-	}
-	return nil
+	return renderChafa(pixels, pixW, pixH, termW, termH)
 }

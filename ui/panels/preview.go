@@ -1,7 +1,7 @@
 package panels
 
 import (
-	"github.com/emin-ozata/lazycut/video"
+	"github.com/ozemin/lazycut/video"
 
 	"github.com/charmbracelet/lipgloss"
 )
