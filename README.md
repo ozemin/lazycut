@@ -19,11 +19,25 @@ brew install lazycut
 ```
 
 ### Build from source
+Prerequisites: Latest version of Golang + ffmpeg + chafa dev packages.
+<details>
+<summary>Fedora</summary>
+
+Install latest version of Golang via COPR as recommended [by Fedora docs](https://developer.fedoraproject.org/tech/languages/go/go-installation.html)
+```sh
+sudo dnf copr enable @go-sig/golang-rawhide
+sudo dnf install golang
+```
+
+Install ffmpeg and chafa
+```sh
+sudo dnf install -y ffmpeg chafa chafa-devel
+```
+</details>
 
 ```bash
-git clone https://github.com/ozemin/lazycut.git
-cd lazycut
-go build
+go install github.com/ozemin/lazycut@latest 
+./lazycut video.mp4
 ```
 
 Requires [FFmpeg](https://ffmpeg.org) and [Chafa](https://hpjansson.org/chafa/).
