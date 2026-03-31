@@ -266,11 +266,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "X":
+		case "x":
 			m.player.RemoveLastSection()
 			return m, nil
 
+		case "X":
+			m.player.ClearSections()
+			return m, nil
+
 		case "p":
+			if n := len(m.player.Sections); n > 0 {
+				last := m.player.Sections[n-1]
+				m.previewQueue = []video.Section{last}
+				m.previewQueueIdx = 0
+				m.player.Seek(last.In)
+				m.previewMode = true
+				m.player.Play()
+			}
+			return m, nil
+
+		case "P":
 			var queue []video.Section
 			if m.player.Trim.InPoint != nil && m.player.Trim.OutPoint != nil {
 				queue = []video.Section{{In: *m.player.Trim.InPoint, Out: *m.player.Trim.OutPoint}}
@@ -282,17 +297,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.previewQueue = queue
 				m.previewQueueIdx = 0
 				m.player.Seek(queue[0].In)
-				m.previewMode = true
-				m.player.Play()
-			}
-			return m, nil
-
-		case "P":
-			if n := len(m.player.Sections); n > 0 {
-				last := m.player.Sections[n-1]
-				m.previewQueue = []video.Section{last}
-				m.previewQueueIdx = 0
-				m.player.Seek(last.In)
 				m.previewMode = true
 				m.player.Play()
 			}
@@ -545,9 +549,10 @@ func (m Model) renderHelpModal() string {
 	trim := sectionStyle.Render("TRIM") + "\n" +
 		kd("i", "Set in-point") + "\n" +
 		kd("o", "Set out-point") + "\n" +
-		kd("X", "Remove last section") + "\n" +
-		kd("p", "Preview all sections") + "\n" +
-		kd("P", "Preview last section") + "\n" +
+		kd("x", "Remove last section") + "\n" +
+		kd("X", "Remove all sections") + "\n" +
+		kd("p", "Preview last section") + "\n" +
+		kd("P", "Preview all sections") + "\n" +
 		kd("d / Esc", "Clear selection") + "\n" +
 		kd("Enter", "Export")
 

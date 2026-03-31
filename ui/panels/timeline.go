@@ -208,21 +208,22 @@ func (t *Timeline) footerHelp(width int) string {
 	if t.exportStatus != "" {
 		result = " " + t.exportStatus
 	} else if len(sections) > 0 && trim.InPoint == nil {
-		remove := "remove section"
+		removeLabel := "remove"
+		previewLabel := "preview"
 		if len(sections) > 1 {
-			remove = "remove last section"
-		}
-		preview := "preview"
-		if len(sections) > 1 {
-			preview = "preview all"
+			removeLabel = "remove last"
+			previewLabel = "preview last"
 		}
 		hints := " " + badge +
 			kd("Enter", "export", true) + sep +
 			kd("i", "in", false) + "  " + kd("o", "out", false) + sep +
-			kd("X", remove, false) + sep +
-			kd("p", preview, false)
+			kd("x", removeLabel, false)
 		if len(sections) > 1 {
-			hints += "  " + kd("P", "preview last", false)
+			hints += "  " + kd("X", "remove all", false)
+		}
+		hints += sep + kd("p", previewLabel, false)
+		if len(sections) > 1 {
+			hints += "  " + kd("P", "preview all", false)
 		}
 		result = hints + sep +
 			kd("h/l", "±1s", false) + "  " + kd("H/L", "±5s", false) + sep +
