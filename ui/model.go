@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ozemin/lazycut/ui/keymap"
 	"github.com/ozemin/lazycut/ui/panels"
 	"github.com/ozemin/lazycut/video"
 
@@ -57,6 +58,7 @@ type Model struct {
 	showHelpModal bool
 	undoStack     []trimSnapshot
 
+	km          *keymap.Keymap
 	repeatCount int
 
 	previewQueue    []video.Section
@@ -74,6 +76,7 @@ func NewModel(player *video.Player) Model {
 		preview:    panels.NewPreview(player),
 		properties: panels.NewProperties(player),
 		timeline:   panels.NewTimeline(player),
+		km:         keymap.New(),
 	}
 }
 
@@ -181,6 +184,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.repeatCount = 0
 		}
 
+		if amount, ok := m.km.Seek(msg); ok {
+			n := pendingRepeat
+			if n <= 0 {
+				n = 1
+			}
+			m.player.Seek(pos + time.Duration(n)*amount)
+			return m, nil
+		}
+
 		switch key {
 		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 			m.repeatCount = pendingRepeat*10 + int(msg.Runes[0]-'0')
@@ -198,38 +210,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case " ":
 			m.player.Toggle()
-			return m, nil
-
-		case "h":
-			n := pendingRepeat
-			if n <= 0 {
-				n = 1
-			}
-			m.player.Seek(pos - time.Duration(n)*time.Second)
-			return m, nil
-
-		case "l":
-			n := pendingRepeat
-			if n <= 0 {
-				n = 1
-			}
-			m.player.Seek(pos + time.Duration(n)*time.Second)
-			return m, nil
-
-		case "H":
-			n := pendingRepeat
-			if n <= 0 {
-				n = 1
-			}
-			m.player.Seek(pos - time.Duration(n*5)*time.Second)
-			return m, nil
-
-		case "L":
-			n := pendingRepeat
-			if n <= 0 {
-				n = 1
-			}
-			m.player.Seek(pos + time.Duration(n*5)*time.Second)
 			return m, nil
 
 		case ",":
@@ -537,6 +517,9 @@ func (m Model) renderHelpModal() string {
 		kd("Space", "Play/Pause") + "\n" +
 		kd("h / l", "Seek ±1 second") + "\n" +
 		kd("H / L", "Seek ±5 seconds") + "\n" +
+		kd("← / →", "Seek ±5 seconds") + "\n" +
+		kd("⇧← / ⇧→", "Seek ±1 second") + "\n" +
+		kd("↑ / ↓", "Seek ±1 minute") + "\n" +
 		kd(", / .", "Seek ±1 frame") + "\n" +
 		kd("0", "Go to start") + "\n" +
 		kd("G / $", "Go to end") + "\n" +

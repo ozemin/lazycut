@@ -58,6 +58,9 @@ lazycut probe video.mp4
 | `Space` | Play/Pause |
 | `h` / `l` | Seek ±1s |
 | `H` / `L` | Seek ±5s |
+| `←` / `→` | Seek ±5s |
+| `Shift+←` / `Shift+→` | Seek ±1s |
+| `↑` / `↓` | Seek ±1 minute |
 | `,` / `.` | Seek ±1 frame |
 | `0` | Go to start |
 | `G` / `$` | Go to end |
