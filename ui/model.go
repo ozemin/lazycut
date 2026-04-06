@@ -387,10 +387,7 @@ func (m Model) View() string {
 	previewContent := m.preview.Render(dims.PreviewContentWidth, dims.PreviewContentHeight)
 	previewPanel := renderPanel(previewContent, dims.PreviewWidth, dims.PreviewHeight)
 
-	propertiesContent := m.properties.Render(dims.PropertiesContentWidth, dims.PropertiesContentHeight)
-	propertiesPanel := renderPanel(propertiesContent, dims.PropertiesWidth, dims.PropertiesHeight)
-
-	topRow := lipgloss.JoinHorizontal(lipgloss.Top, previewPanel, propertiesPanel)
+	propertiesLine := m.properties.RenderLine(dims.PropertiesLineWidth)
 
 	m.timeline.SetExportStatus(m.exportStatus)
 	repeatDisplay := ""
@@ -401,7 +398,7 @@ func (m Model) View() string {
 	timelineContent := m.timeline.Render(dims.TimelineContentWidth, dims.TimelineContentHeight)
 	timelinePanel := renderPanel(timelineContent, dims.TimelineWidth, dims.TimelineHeight)
 
-	base := lipgloss.JoinVertical(lipgloss.Left, topRow, timelinePanel)
+	base := lipgloss.JoinVertical(lipgloss.Left, previewPanel, propertiesLine, timelinePanel)
 
 	if m.showHelpModal {
 		return m.renderHelpModal()
