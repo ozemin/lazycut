@@ -315,6 +315,13 @@ func (p *Player) renderLoop(s *session) {
 		close(s.frames)
 	}()
 
+	// A source with no video stream never yields a frame, and the loop below
+	// would respawn ffmpeg as fast as it can fail.
+	if p.properties.Width <= 0 || p.properties.Height <= 0 {
+		<-s.ctx.Done()
+		return
+	}
+
 	for {
 		select {
 		case <-s.ctx.Done():

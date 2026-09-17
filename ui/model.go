@@ -173,7 +173,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		pos := m.player.Position()
 		fps := m.player.FPS()
-		frameDuration := time.Second / time.Duration(fps)
+		// An audio-only source reports 0 fps, and there is no frame to step by.
+		var frameDuration time.Duration
+		if fps > 0 {
+			frameDuration = time.Second / time.Duration(fps)
+		}
 
 		key := msg.String()
 		isDigit := len(key) == 1 && key[0] >= '1' && key[0] <= '9'
