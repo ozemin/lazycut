@@ -2,6 +2,7 @@ package video
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"sync"
@@ -11,9 +12,27 @@ import (
 const frameBufferSize = 15
 
 type bufferedFrame struct {
-	frame   string
-	pos     time.Duration
-	version int
+	frame string
+	pos   time.Duration
+}
+
+// session owns a single playback run. Play and Seek install a fresh one and
+// cancel the previous, and the render/display goroutines only ever touch the
+// session they were handed — so a retired run can never observe or close the
+// live run's channel.
+type session struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	frames chan bufferedFrame
+}
+
+func newSession() *session {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &session{
+		ctx:    ctx,
+		cancel: cancel,
+		frames: make(chan bufferedFrame, frameBufferSize),
+	}
 }
 
 type Section struct {
@@ -74,16 +93,11 @@ type Player struct {
 
 	mu            sync.Mutex
 	currentFrame  string
-	stopChan      chan struct{}
-	stream        *FrameStream
+	session       *session
 	frameInterval time.Duration
-	frameBuffer   chan bufferedFrame
-	seekVersion   int
 
-	// Optimization: Frame cache
 	cache *FrameCache
 
-	// Audio playback
 	audioPlayer *AudioPlayer
 
 	Trim     TrimState
@@ -122,7 +136,6 @@ func NewPlayer(path string, previewFPS int) (*Player, error) {
 		fps:         int(props.FPS),
 		properties:  props,
 		previewFPS:  previewFPS,
-		stopChan:    make(chan struct{}),
 		cache:       NewFrameCache(DefaultCacheCapacity, props.FPS),
 		audioPlayer: NewAudioPlayer(path),
 	}, nil
@@ -149,17 +162,21 @@ func (p *Player) Play() error {
 		return nil
 	}
 	p.playing = true
-	p.stopChan = make(chan struct{})
 	p.frameInterval = time.Second / time.Duration(p.previewFPS)
 	pos := p.position
-	p.frameBuffer = make(chan bufferedFrame, frameBufferSize)
+	prev := p.session
+	s := newSession()
+	p.session = s
 	p.mu.Unlock()
 
-	// Start audio playback
+	if prev != nil {
+		prev.cancel()
+	}
+
 	p.audioPlayer.Start(pos.Seconds())
 
-	go p.renderLoop()
-	go p.displayLoop()
+	go p.renderLoop(s)
+	go p.displayLoop(s)
 	return nil
 }
 
@@ -170,19 +187,16 @@ func (p *Player) Pause() {
 		return
 	}
 	p.playing = false
-	close(p.stopChan)
-	stream := p.stream
-	p.stream = nil
+	s := p.session
 	pos := p.position
 	width, height := p.width, p.height
 	p.mu.Unlock()
 
-	// Stop audio playback
-	p.audioPlayer.Stop()
-
-	if stream != nil {
-		stream.Close()
+	if s != nil {
+		s.cancel()
 	}
+
+	p.audioPlayer.Stop()
 
 	if width > 0 && height > 0 {
 		p.renderFrameCached(pos, width, height)
@@ -218,28 +232,30 @@ func (p *Player) Seek(position time.Duration) {
 	position = max(position, 0)
 	position = min(position, p.duration)
 	p.position = position
-	if p.playing {
-		p.seekVersion++
-	}
 	width, height := p.width, p.height
 	playing := p.playing
-	stream := p.stream
-	p.stream = nil
+	var prev, s *session
+	if playing {
+		prev, s = p.session, newSession()
+		p.session = s
+	}
 	p.mu.Unlock()
 
-	// Stop audio during seek
+	if prev != nil {
+		prev.cancel()
+	}
+
 	p.audioPlayer.Stop()
 
-	if playing && stream != nil {
-		stream.Close()
-	}
-
-	// Restart audio from new position if playing
-	if playing {
+	// s is non-nil only when playback was running, so it doubles as that check.
+	if s != nil {
 		p.audioPlayer.Start(position.Seconds())
+		go p.renderLoop(s)
+		go p.displayLoop(s)
+		return
 	}
 
-	if !playing && width > 0 && height > 0 {
+	if width > 0 && height > 0 {
 		p.renderFrameCached(position, width, height)
 	}
 }
@@ -268,6 +284,13 @@ func (p *Player) CurrentFrame() string {
 
 func (p *Player) Close() {
 	p.Pause()
+	p.mu.Lock()
+	s := p.session
+	p.session = nil
+	p.mu.Unlock()
+	if s != nil {
+		s.cancel()
+	}
 	p.audioPlayer.Stop()
 }
 
@@ -279,8 +302,9 @@ func (p *Player) IsMuted() bool {
 	return p.audioPlayer.IsMuted()
 }
 
-// renderLoop is the producer goroutine: fetches and renders frames into frameBuffer ahead of playback.
-func (p *Player) renderLoop() {
+// renderLoop is the sole closer of s.frames, which is how displayLoop learns
+// the run is over.
+func (p *Player) renderLoop(s *session) {
 	var currentStream *FrameStream
 	var renderPos time.Duration
 
@@ -288,26 +312,27 @@ func (p *Player) renderLoop() {
 		if currentStream != nil {
 			currentStream.Close()
 		}
-		close(p.frameBuffer)
+		close(s.frames)
 	}()
+
+	// A source with no video stream never yields a frame, and the loop below
+	// would respawn ffmpeg as fast as it can fail.
+	if p.properties.Width <= 0 || p.properties.Height <= 0 {
+		<-s.ctx.Done()
+		return
+	}
 
 	for {
 		select {
-		case <-p.stopChan:
+		case <-s.ctx.Done():
 			return
 		default:
 		}
 
 		p.mu.Lock()
-		if !p.playing {
-			p.mu.Unlock()
-			return
-		}
 		width := p.width
 		height := p.height
 		frameInterval := p.frameInterval
-		version := p.seekVersion
-		reset := p.stream == nil && currentStream != nil
 		p.mu.Unlock()
 
 		if width <= 0 || height <= 0 {
@@ -319,12 +344,6 @@ func (p *Player) renderLoop() {
 		videoWidth := p.properties.Width
 		videoHeight := p.properties.Height
 
-		// Seek detected or first start
-		if reset {
-			currentStream.Close()
-			currentStream = nil
-		}
-
 		if currentStream == nil || currentStream.NeedsRestart(width, height, previewFPS, videoWidth) {
 			if currentStream != nil {
 				currentStream.Close()
@@ -333,16 +352,12 @@ func (p *Player) renderLoop() {
 			renderPos = p.position
 			p.mu.Unlock()
 
-			stream, err := NewFrameStream(p.path, renderPos, width, height, previewFPS, videoWidth, videoHeight)
+			stream, err := NewFrameStream(s.ctx, p.path, renderPos, width, height, previewFPS, videoWidth, videoHeight)
 			if err != nil {
 				time.Sleep(20 * time.Millisecond)
 				continue
 			}
 			currentStream = stream
-			p.mu.Lock()
-			p.stream = stream
-			version = p.seekVersion
-			p.mu.Unlock()
 		}
 
 		frameBytes, err := currentStream.NextFrame()
@@ -365,8 +380,8 @@ func (p *Player) renderLoop() {
 		p.cache.Put(renderPos, width, height, frame)
 
 		select {
-		case p.frameBuffer <- bufferedFrame{frame: frame, pos: renderPos, version: version}:
-		case <-p.stopChan:
+		case s.frames <- bufferedFrame{frame: frame, pos: renderPos}:
+		case <-s.ctx.Done():
 			return
 		}
 
@@ -374,8 +389,7 @@ func (p *Player) renderLoop() {
 	}
 }
 
-// displayLoop is the consumer goroutine: reads pre-rendered frames and displays them at the correct rate.
-func (p *Player) displayLoop() {
+func (p *Player) displayLoop(s *session) {
 	p.mu.Lock()
 	frameInterval := p.frameInterval
 	p.mu.Unlock()
@@ -383,52 +397,45 @@ func (p *Player) displayLoop() {
 	for {
 		var item bufferedFrame
 		select {
-		case f, ok := <-p.frameBuffer:
+		case f, ok := <-s.frames:
 			if !ok {
-				// Channel closed = end of video or stop
+				// Producer is gone. Only report end of video if this session is
+				// still the live one — otherwise a Pause or Seek retired it.
 				p.mu.Lock()
-				if p.playing {
+				ended := p.session == s && p.playing
+				if ended {
 					p.position = p.duration
 					p.playing = false
 				}
 				p.mu.Unlock()
-				p.audioPlayer.Stop()
+				if ended {
+					p.audioPlayer.Stop()
+				}
 				return
 			}
 			item = f
-		case <-p.stopChan:
+		case <-s.ctx.Done():
 			return
 		}
 
 		displayStart := time.Now()
 
 		p.mu.Lock()
-		if item.version < p.seekVersion {
-			// Stale frame from before a seek — discard
-			p.mu.Unlock()
-			continue
-		}
-		if !p.playing {
-			p.mu.Unlock()
-			return
-		}
 		p.currentFrame = item.frame
 		p.position = item.pos
 		p.mu.Unlock()
 
-		// Sleep remaining time to maintain target frame rate
 		elapsed := time.Since(displayStart)
 		if sleep := frameInterval - elapsed; sleep > 0 {
 			select {
 			case <-time.After(sleep):
-			case <-p.stopChan:
+			case <-s.ctx.Done():
 				return
 			}
 		}
 	}
 }
 
-// renderFrameCached renders a frame using cache
 func (p *Player) renderFrameCached(position time.Duration, width, height int) {
 	if frame, ok := p.cache.Get(position, width, height); ok {
 		p.mu.Lock()

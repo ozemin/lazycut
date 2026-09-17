@@ -18,8 +18,8 @@ type FrameStream struct {
 	cancel      context.CancelFunc
 	width       int // terminal char width
 	height      int // terminal char height
-	pixelWidth  int // ffmpeg output pixel width
-	pixelHeight int // ffmpeg output pixel height
+	pixelWidth  int
+	pixelHeight int
 	videoWidth  int // source video width (for NeedsRestart)
 	targetFPS   int
 	mu          sync.Mutex
@@ -51,14 +51,16 @@ func computePixelDimensions(termW, termH, videoW, videoH int) (int, int) {
 	return pixW, pixH
 }
 
-func NewFrameStream(path string, start time.Duration, termW, termH, fps, videoW, videoH int) (*FrameStream, error) {
+// Cancelling parent kills the ffmpeg process, which is what unblocks a reader
+// parked in NextFrame.
+func NewFrameStream(parent context.Context, path string, start time.Duration, termW, termH, fps, videoW, videoH int) (*FrameStream, error) {
 	if termW <= 0 || termH <= 0 || fps <= 0 {
 		return nil, fmt.Errorf("invalid stream configuration")
 	}
 
 	pixW, pixH := computePixelDimensions(termW, termH, videoW, videoH)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parent)
 
 	filter := fmt.Sprintf("scale=%d:%d:flags=fast_bilinear,fps=%d", pixW, pixH, fps)
 
@@ -96,7 +98,6 @@ func NewFrameStream(path string, start time.Duration, termW, termH, fps, videoW,
 	}, nil
 }
 
-// Close stops the ffmpeg process.
 func (s *FrameStream) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -114,7 +115,6 @@ func (s *FrameStream) Close() {
 	}
 }
 
-// NeedsRestart checks if the stream configuration matches the desired parameters.
 func (s *FrameStream) NeedsRestart(termW, termH, fps, videoW int) bool {
 	if s == nil {
 		return true
@@ -123,12 +123,10 @@ func (s *FrameStream) NeedsRestart(termW, termH, fps, videoW int) bool {
 		s.targetFPS != fps || s.videoWidth != videoW
 }
 
-// PixelDimensions returns the pixel width and height of each frame.
 func (s *FrameStream) PixelDimensions() (int, int) {
 	return s.pixelWidth, s.pixelHeight
 }
 
-// NextFrame reads the next raw RGBA frame from the stream.
 func (s *FrameStream) NextFrame() ([]byte, error) {
 	s.mu.Lock()
 	stdout := s.stdout
