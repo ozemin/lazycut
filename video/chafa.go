@@ -41,8 +41,6 @@ func renderChafa(pixels []byte, pixW, pixH, termW, termH int) (string, error) {
 		"--animate", "off",
 	}
 	if chafaProbesTerminal() {
-		// Otherwise chafa opens /dev/tty and waits for a query reply that Bubble
-		// Tea's raw-mode stdin reader swallows, hanging every render.
 		args = append(args, "--probe", "off")
 	}
 	args = append(args, "-")
@@ -61,9 +59,6 @@ func renderChafa(pixels []byte, pixW, pixH, termW, termH int) (string, error) {
 	return string(out), nil
 }
 
-// chafa has no PPM loader on Linux, where the raw PPM this replaced only ever
-// decoded through macOS' CoreGraphics fallback. The PNG loader is bundled in
-// every build, and uncompressed PNG also encodes 5-8x faster than PPM did.
 func encodeFrame(pixels []byte, pixW, pixH int) ([]byte, error) {
 	img := &image.NRGBA{
 		Pix:    pixels,
@@ -79,9 +74,6 @@ func encodeFrame(pixels []byte, pixW, pixH int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Probing arrived in chafa 1.16 and older builds abort on the unknown option,
-// so --probe cannot be passed unconditionally. An unreadable version counts as
-// probing: a rejected flag surfaces as a chafa error, a missed one hangs.
 var chafaProbesTerminal = sync.OnceValue(func() bool {
 	out, err := exec.Command("chafa", "--version").Output()
 	if err != nil {
