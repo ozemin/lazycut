@@ -61,6 +61,10 @@ Keyboard Shortcuts:
 		}
 		defer player.Close()
 
+		if err := player.Validate(); err != nil {
+			return fmt.Errorf("cannot open %s: %w", videoPath, err)
+		}
+
 		m := ui.NewModel(player)
 
 		p := tea.NewProgram(

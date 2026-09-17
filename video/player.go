@@ -3,6 +3,7 @@ package video
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"sync"
@@ -10,6 +11,15 @@ import (
 )
 
 const frameBufferSize = 15
+
+// Without backoff, a run that never yields a frame respawns ffmpeg as fast as it can fail.
+const (
+	maxRenderFailures  = 8
+	renderBackoffStart = 50 * time.Millisecond
+	renderBackoffMax   = 2 * time.Second
+)
+
+var ErrNoVideoStream = errors.New("file has no video stream")
 
 type bufferedFrame struct {
 	frame string
@@ -84,7 +94,7 @@ type Player struct {
 	duration   time.Duration
 	position   time.Duration
 	playing    bool
-	fps        int
+	fps        float64
 	width      int
 	height     int
 	properties *VideoProperties
@@ -124,6 +134,10 @@ func NewPlayer(path string, previewFPS int) (*Player, error) {
 		return nil, fmt.Errorf("failed to get video info: %w", err)
 	}
 
+	if props.Duration <= 0 {
+		return nil, fmt.Errorf("could not determine the duration of %s", path)
+	}
+
 	if previewFPS <= 0 {
 		previewFPS = 24
 	}
@@ -133,7 +147,7 @@ func NewPlayer(path string, previewFPS int) (*Player, error) {
 		duration:    props.Duration,
 		position:    0,
 		playing:     false,
-		fps:         int(props.FPS),
+		fps:         props.FPS,
 		properties:  props,
 		previewFPS:  previewFPS,
 		cache:       NewFrameCache(DefaultCacheCapacity, props.FPS),
@@ -260,8 +274,15 @@ func (p *Player) Seek(position time.Duration) {
 	}
 }
 
-func (p *Player) FPS() int {
+func (p *Player) FPS() float64 {
 	return p.fps
+}
+
+func (p *Player) Validate() error {
+	if p.properties.Width <= 0 || p.properties.Height <= 0 {
+		return ErrNoVideoStream
+	}
+	return nil
 }
 
 func (p *Player) Path() string {
@@ -315,12 +336,13 @@ func (p *Player) renderLoop(s *session) {
 		close(s.frames)
 	}()
 
-	// A source with no video stream never yields a frame, and the loop below
-	// would respawn ffmpeg as fast as it can fail.
-	if p.properties.Width <= 0 || p.properties.Height <= 0 {
+	// Returning here instead of waiting would look like a natural EOF to displayLoop.
+	if p.Validate() != nil {
 		<-s.ctx.Done()
 		return
 	}
+
+	failures := 0
 
 	for {
 		select {
@@ -354,7 +376,10 @@ func (p *Player) renderLoop(s *session) {
 
 			stream, err := NewFrameStream(s.ctx, p.path, renderPos, width, height, previewFPS, videoWidth, videoHeight)
 			if err != nil {
-				time.Sleep(20 * time.Millisecond)
+				failures++
+				if !p.retryAfterFailure(s, failures) {
+					return
+				}
 				continue
 			}
 			currentStream = stream
@@ -367,8 +392,13 @@ func (p *Player) renderLoop(s *session) {
 			if renderPos >= p.duration-frameInterval {
 				return // natural EOF
 			}
+			failures++
+			if !p.retryAfterFailure(s, failures) {
+				return
+			}
 			continue
 		}
+		failures = 0
 
 		pixW, pixH := currentStream.PixelDimensions()
 		frame, err := p.renderFrameFromPixels(frameBytes, pixW, pixH, width, height)
@@ -386,6 +416,40 @@ func (p *Player) renderLoop(s *session) {
 		}
 
 		renderPos += frameInterval
+	}
+}
+
+func (p *Player) retryAfterFailure(s *session, failures int) bool {
+	if failures >= maxRenderFailures {
+		p.stopPlayback(s)
+		return false
+	}
+	select {
+	case <-time.After(renderBackoff(failures)):
+		return true
+	case <-s.ctx.Done():
+		return false
+	}
+}
+
+func renderBackoff(failures int) time.Duration {
+	if failures < 1 {
+		return renderBackoffStart
+	}
+	return min(renderBackoffStart<<(failures-1), renderBackoffMax)
+}
+
+// Unlike natural EOF, a failed run leaves the position where it is.
+func (p *Player) stopPlayback(s *session) {
+	p.mu.Lock()
+	stopped := p.session == s && p.playing
+	if stopped {
+		p.playing = false
+	}
+	p.mu.Unlock()
+
+	if stopped {
+		p.audioPlayer.Stop()
 	}
 }
 

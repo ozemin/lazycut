@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -173,11 +174,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		pos := m.player.Position()
 		fps := m.player.FPS()
-		// An audio-only source reports 0 fps, and there is no frame to step by.
-		var frameDuration time.Duration
-		if fps > 0 {
-			frameDuration = time.Second / time.Duration(fps)
-		}
 
 		key := msg.String()
 		isDigit := len(key) == 1 && key[0] >= '1' && key[0] <= '9'
@@ -221,7 +217,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if n <= 0 {
 				n = 1
 			}
-			m.player.Seek(pos - time.Duration(n)*frameDuration)
+			m.player.Seek(stepFrames(pos, fps, -n))
 			return m, nil
 
 		case ".":
@@ -229,7 +225,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if n <= 0 {
 				n = 1
 			}
-			m.player.Seek(pos + time.Duration(n)*frameDuration)
+			m.player.Seek(stepFrames(pos, fps, n))
 			return m, nil
 
 		case "$", "G":
@@ -750,13 +746,27 @@ func (m Model) renderExportModal() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }
 
-func formatDuration(d time.Duration, fps int) string {
+// Keeps float error from reading a frame boundary as the frame before it.
+const frameEpsilon = 1e-3
+
+func formatDuration(d time.Duration, fps float64) string {
 	total := int(d.Seconds())
 	mins := total / 60
 	secs := total % 60
 	frame := 0
 	if fps > 0 {
-		frame = int(d.Seconds()*float64(fps)) % fps
+		framesBefore := math.Ceil(float64(total)*fps - frameEpsilon)
+		absolute := math.Floor(d.Seconds()*fps + frameEpsilon)
+		frame = max(int(absolute-framesBefore), 0)
 	}
 	return fmt.Sprintf("%02d:%02d.%02d", mins, secs, frame)
+}
+
+// Snapping to a boundary: adding a frame duration drifts on fractional rates.
+func stepFrames(pos time.Duration, fps float64, n int) time.Duration {
+	if fps <= 0 || n == 0 {
+		return pos
+	}
+	idx := max(int64(math.Floor(pos.Seconds()*fps+frameEpsilon))+int64(n), 0)
+	return time.Duration(math.Round(float64(idx) / fps * float64(time.Second)))
 }
