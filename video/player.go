@@ -305,7 +305,6 @@ func (p *Player) renderLoop() {
 		}
 		width := p.width
 		height := p.height
-		fps := p.fps
 		frameInterval := p.frameInterval
 		version := p.seekVersion
 		reset := p.stream == nil && currentStream != nil
@@ -314,9 +313,6 @@ func (p *Player) renderLoop() {
 		if width <= 0 || height <= 0 {
 			time.Sleep(10 * time.Millisecond)
 			continue
-		}
-		if fps <= 0 {
-			fps = 24
 		}
 
 		previewFPS := p.previewFPS

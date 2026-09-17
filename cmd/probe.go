@@ -17,7 +17,7 @@ var probeCmd = &cobra.Command{
 
 		props, err := video.GetVideoProperties(videoPath)
 		if err != nil {
-			return fmt.Errorf("failed to get video properties: %v", err)
+			return fmt.Errorf("failed to get video properties: %w", err)
 		}
 
 		fmt.Print(props.Summary(videoPath))

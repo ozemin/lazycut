@@ -57,7 +57,7 @@ Keyboard Shortcuts:
 
 		player, err := video.NewPlayer(videoPath, fps)
 		if err != nil {
-			return fmt.Errorf("failed to open video: %v", err)
+			return fmt.Errorf("failed to open video: %w", err)
 		}
 		defer player.Close()
 
@@ -69,7 +69,7 @@ Keyboard Shortcuts:
 		)
 
 		if _, err := p.Run(); err != nil {
-			return fmt.Errorf("error: %v", err)
+			return fmt.Errorf("error: %w", err)
 		}
 
 		return nil

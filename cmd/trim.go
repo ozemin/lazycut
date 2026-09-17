@@ -31,12 +31,12 @@ Examples:
 
 		inPoint, err := parseTimestamp(trimIn)
 		if err != nil {
-			return fmt.Errorf("invalid --in timestamp: %v", err)
+			return fmt.Errorf("invalid --in timestamp: %w", err)
 		}
 
 		outPoint, err := parseTimestamp(trimOut)
 		if err != nil {
-			return fmt.Errorf("invalid --out timestamp: %v", err)
+			return fmt.Errorf("invalid --out timestamp: %w", err)
 		}
 
 		if outPoint <= inPoint {
@@ -64,7 +64,7 @@ Examples:
 		fmt.Fprintln(cmd.OutOrStdout())
 
 		if err := <-done; err != nil {
-			return fmt.Errorf("export failed: %v", err)
+			return fmt.Errorf("export failed: %w", err)
 		}
 
 		fmt.Fprintln(cmd.OutOrStdout(), "Done.")
@@ -114,7 +114,7 @@ func init() {
 	trimCmd.Flags().StringVar(&trimIn, "in", "", "start timestamp (HH:MM:SS, MM:SS, or seconds)")
 	trimCmd.Flags().StringVar(&trimOut, "out", "", "end timestamp (HH:MM:SS, MM:SS, or seconds)")
 	trimCmd.Flags().StringVarP(&trimOutput, "output", "o", "", "output file path (optional)")
-	trimCmd.MarkFlagRequired("in")
-	trimCmd.MarkFlagRequired("out")
+	_ = trimCmd.MarkFlagRequired("in")
+	_ = trimCmd.MarkFlagRequired("out")
 	rootCmd.AddCommand(trimCmd)
 }
