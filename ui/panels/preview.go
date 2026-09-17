@@ -1,9 +1,9 @@
 package panels
 
 import (
-	"github.com/ozemin/lazycut/video"
-
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/ozemin/lazycut/video"
 )
 
 type Preview struct {

@@ -5,13 +5,13 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/ozemin/lazycut/ui"
-	"github.com/ozemin/lazycut/video"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
+
+	"github.com/ozemin/lazycut/ui"
+	"github.com/ozemin/lazycut/video"
 )
 
 var (
@@ -57,7 +57,7 @@ Keyboard Shortcuts:
 
 		player, err := video.NewPlayer(videoPath, fps)
 		if err != nil {
-			return fmt.Errorf("failed to open video: %v", err)
+			return fmt.Errorf("failed to open video: %w", err)
 		}
 		defer player.Close()
 
@@ -69,7 +69,7 @@ Keyboard Shortcuts:
 		)
 
 		if _, err := p.Run(); err != nil {
-			return fmt.Errorf("error: %v", err)
+			return fmt.Errorf("error: %w", err)
 		}
 
 		return nil

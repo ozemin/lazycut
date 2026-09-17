@@ -1,0 +1,64 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. lazycut video.mp4
+        2. Press `i`, seek forward, press `o`
+        3. Press Enter to export
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: lazycut version
+      description: Output of `lazycut --version`, or the commit you built from.
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 15.3 (arm64) / Fedora 42
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal emulator
+      description: Rendering bugs are often terminal-specific.
+      placeholder: Ghostty 1.1 / iTerm2 3.5 / kitty 0.38
+    validations:
+      required: true
+
+  - type: textarea
+    id: deps
+    attributes:
+      label: External tool versions
+      description: Output of `chafa --version` and `ffmpeg -version | head -1`.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, terminal recordings, or sample media.
+    validations:
+      required: false

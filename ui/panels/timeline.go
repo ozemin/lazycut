@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ozemin/lazycut/video"
-
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/ozemin/lazycut/video"
 )
 
 type Timeline struct {
@@ -70,7 +70,7 @@ func (t *Timeline) progressBar(barWidth int, pos, dur time.Duration, trim *video
 
 	cursor := min(int(float64(pos)/float64(dur)*float64(barWidth)), barWidth)
 
-	var in, out int = -1, -1
+	in, out := -1, -1
 	if trim.InPoint != nil {
 		in = min(int(float64(*trim.InPoint)/float64(dur)*float64(barWidth)), barWidth)
 	}

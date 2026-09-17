@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/ozemin/lazycut/video"
-
 	"github.com/spf13/cobra"
+
+	"github.com/ozemin/lazycut/video"
 )
 
 var probeCmd = &cobra.Command{
@@ -17,7 +17,7 @@ var probeCmd = &cobra.Command{
 
 		props, err := video.GetVideoProperties(videoPath)
 		if err != nil {
-			return fmt.Errorf("failed to get video properties: %v", err)
+			return fmt.Errorf("failed to get video properties: %w", err)
 		}
 
 		fmt.Print(props.Summary(videoPath))

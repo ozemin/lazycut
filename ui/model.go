@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/ozemin/lazycut/ui/keymap"
 	"github.com/ozemin/lazycut/ui/panels"
 	"github.com/ozemin/lazycut/video"
-
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 const tickFPS = 30
@@ -209,7 +209,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case " ":
-			m.player.Toggle()
+			_ = m.player.Toggle()
 			return m, nil
 
 		case ",":
@@ -261,7 +261,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.previewQueueIdx = 0
 				m.player.Seek(last.In)
 				m.previewMode = true
-				m.player.Play()
+				_ = m.player.Play()
 			}
 			return m, nil
 
@@ -278,7 +278,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.previewQueueIdx = 0
 				m.player.Seek(queue[0].In)
 				m.previewMode = true
-				m.player.Play()
+				_ = m.player.Play()
 			}
 			return m, nil
 
@@ -454,20 +454,22 @@ func (m Model) handleExportModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyLeft:
-		if m.exportFocusField == 1 {
+		switch m.exportFocusField {
+		case 1:
 			m.exportAspectRatio--
 			if m.exportAspectRatio < 0 {
 				m.exportAspectRatio = len(video.AspectRatioOptions) - 1
 			}
-		} else if m.exportFocusField == 2 {
+		case 2:
 			m.exportMode = (m.exportMode + 1) % 2
 		}
 		return m, nil
 
 	case tea.KeyRight:
-		if m.exportFocusField == 1 {
+		switch m.exportFocusField {
+		case 1:
 			m.exportAspectRatio = (m.exportAspectRatio + 1) % len(video.AspectRatioOptions)
-		} else if m.exportFocusField == 2 {
+		case 2:
 			m.exportMode = (m.exportMode + 1) % 2
 		}
 		return m, nil
@@ -687,11 +689,12 @@ func (m Model) renderExportModal() string {
 		fn := "  "
 		ar := "  "
 		mode := "  "
-		if m.exportFocusField == 0 {
+		switch m.exportFocusField {
+		case 0:
 			fn = accentStyle.Render("> ")
-		} else if m.exportFocusField == 1 {
+		case 1:
 			ar = accentStyle.Render("> ")
-		} else {
+		default:
 			mode = accentStyle.Render("> ")
 		}
 
