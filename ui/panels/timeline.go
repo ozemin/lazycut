@@ -2,6 +2,7 @@ package panels
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -78,7 +79,6 @@ func (t *Timeline) progressBar(barWidth int, pos, dur time.Duration, trim *video
 		out = min(int(float64(*trim.OutPoint)/float64(dur)*float64(barWidth)), barWidth)
 	}
 
-	// Build index ranges for committed sections
 	type sectionRange struct{ in, out int }
 	var committedRanges []sectionRange
 	for _, sec := range t.player.Sections {
@@ -125,7 +125,7 @@ func (t *Timeline) markerLine(barWidth int, dur time.Duration, trim *video.TrimS
 		line[i] = " "
 	}
 
-	// Draw committed section markers (active trim markers take priority)
+	// Drawn before the active trim markers, which win on overlap.
 	for _, sec := range t.player.Sections {
 		si := min(int(float64(sec.In)/float64(dur)*float64(barWidth))+1, len(line)-1)
 		so := min(int(float64(sec.Out)/float64(dur)*float64(barWidth))+1, len(line)-1)
@@ -162,13 +162,17 @@ func (t *Timeline) cursorLine(barWidth int, pos, dur time.Duration) string {
 	return string(line)
 }
 
-func formatDuration(d time.Duration, fps int) string {
+const frameEpsilon = 1e-3
+
+func formatDuration(d time.Duration, fps float64) string {
 	total := int(d.Seconds())
 	mins := total / 60
 	secs := total % 60
 	frame := 0
 	if fps > 0 {
-		frame = int(d.Seconds()*float64(fps)) % fps
+		framesBefore := math.Ceil(float64(total)*fps - frameEpsilon)
+		absolute := math.Floor(d.Seconds()*fps + frameEpsilon)
+		frame = max(int(absolute-framesBefore), 0)
 	}
 	return fmt.Sprintf("%02d:%02d.%02d", mins, secs, frame)
 }
