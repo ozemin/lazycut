@@ -5,12 +5,12 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/ozemin/lazycut/ui/keymap"
 	"github.com/ozemin/lazycut/ui/panels"
 	"github.com/ozemin/lazycut/video"
-
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 const tickFPS = 30

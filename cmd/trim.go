@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ozemin/lazycut/video"
-
 	"github.com/spf13/cobra"
+
+	"github.com/ozemin/lazycut/video"
 )
 
 var (

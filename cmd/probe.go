@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/ozemin/lazycut/video"
-
 	"github.com/spf13/cobra"
+
+	"github.com/ozemin/lazycut/video"
 )
 
 var probeCmd = &cobra.Command{

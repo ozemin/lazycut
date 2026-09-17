@@ -3,9 +3,9 @@ package panels
 import (
 	"strings"
 
-	"github.com/ozemin/lazycut/video"
-
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/ozemin/lazycut/video"
 )
 
 type Properties struct {

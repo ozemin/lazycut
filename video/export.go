@@ -235,7 +235,8 @@ func BuildFFmpegCommand(opts ExportOptions) string {
 	}
 	duration := opts.OutPoint - opts.InPoint
 
-	args := []string{"ffmpeg", "-y",
+	args := []string{
+		"ffmpeg", "-y",
 		"-ss", fmt.Sprintf("%.3f", opts.InPoint.Seconds()),
 		"-i", filepath.Base(opts.Input),
 		"-t", fmt.Sprintf("%.3f", duration.Seconds()),
@@ -273,7 +274,8 @@ func ExportWithProgress(opts ExportOptions, progress chan<- float64) (string, er
 	duration := opts.OutPoint - opts.InPoint
 	totalMicros := float64(duration.Microseconds())
 
-	args := []string{"-y",
+	args := []string{
+		"-y",
 		"-ss", fmt.Sprintf("%.3f", opts.InPoint.Seconds()),
 		"-i", opts.Input,
 		"-t", fmt.Sprintf("%.3f", duration.Seconds()),

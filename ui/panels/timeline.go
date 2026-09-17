@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ozemin/lazycut/video"
-
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/ozemin/lazycut/video"
 )
 
 type Timeline struct {

@@ -1,22 +1,22 @@
 package ui
 
 const (
-	minPanelWidth       = 10
-	minPanelHeight      = 5
-	horizontalOverhead  = 6
-	verticalOverhead    = 2
-	timelineFixedHeight = 7
+	minPanelWidth        = 10
+	minPanelHeight       = 5
+	horizontalOverhead   = 6
+	verticalOverhead     = 2
+	timelineFixedHeight  = 7
 	propertiesLineHeight = 1
 )
 
 type PanelDimensions struct {
-	PreviewWidth         int
-	PreviewHeight        int
-	PropertiesLineWidth  int
-	TimelineWidth        int
-	TimelineHeight       int
-	PreviewContentWidth  int
-	PreviewContentHeight int
+	PreviewWidth          int
+	PreviewHeight         int
+	PropertiesLineWidth   int
+	TimelineWidth         int
+	TimelineHeight        int
+	PreviewContentWidth   int
+	PreviewContentHeight  int
 	TimelineContentWidth  int
 	TimelineContentHeight int
 }

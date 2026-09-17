@@ -12,7 +12,7 @@ func defaultSeekBindings() map[string]time.Duration {
 		"right":       +5 * time.Second,
 		"shift+left":  -time.Second,
 		"shift+right": +time.Second,
-		"up":   +time.Minute,
-		"down": -time.Minute,
+		"up":          +time.Minute,
+		"down":        -time.Minute,
 	}
 }

@@ -5,13 +5,13 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/ozemin/lazycut/ui"
-	"github.com/ozemin/lazycut/video"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
+
+	"github.com/ozemin/lazycut/ui"
+	"github.com/ozemin/lazycut/video"
 )
 
 var (
